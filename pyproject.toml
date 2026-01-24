@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lc_conductor"
+version = "0.1.0"
+description = "LC-Conductor: Chemistry-tool for Automated Reasoning and Generation"
+authors = []
+license = {file = "LICENSE"}
+readme = "README.md"
+requires-python = ">=3.11, <3.13"
+dependencies = [
+    "charge @ git+https://github.com/FLASK-LLNL/ChARGe.git",
+    "mcp>=1.10.0",
+    "jsonschema>=4.17.3",
+    "loguru>=0.7.0",
+    "pydantic>=2.10.7",
+    "click",
+    "pre-commit",
+    "black",
+]
+
+[tool.setuptools]
+packages = ["lc_conductor"]
+
+[project.optional-dependencies]
+autogen = ["autogen-agentchat>=0.7.0", "autogen-core>=0.7.0", "autogen-ext>=0.7.0", "openai>=2.0.0", "tiktoken>=0.10.0", "autogen-ext[openai]"]
+test = ["pytest", "pytest-asyncio", "pytest-mock", "responses", "httpx", "requests-mock"]
+
