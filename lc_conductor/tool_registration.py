@@ -17,6 +17,8 @@ import time
 import os
 import re
 import asyncio
+from mcp.server.fastmcp import FastMCP
+
 from charge.utils.mcp_workbench_utils import (
     _setup_mcp_workbenches,
     _close_mcp_workbenches,
@@ -47,8 +49,12 @@ def split_url(url: str) -> Tuple[str, int, str, str]:
     if match:
         protocol = match.group(1) or ""
         host = match.group(2)
-        port = match.group(3) or ""
+        port = int(match.group(3)) or 0
         path = match.group(4) or ""
+    else:
+        raise ValueError(
+            f"Unusable URL provide {url} -- requires either a port or a path"
+        )
 
     if not port and not path:
         raise ValueError(
@@ -61,7 +67,7 @@ def split_url(url: str) -> Tuple[str, int, str, str]:
 @dataclass
 class ToolList:
     server: str
-    names: Optional[str] = None
+    names: Optional[list[str]] = None
 
     def json(self):
         return asdict(self)
@@ -105,7 +111,10 @@ def get_client_info(request: Request):
         client_ip = forwarded_for.split(",")[0].strip()
     else:
         # Fallback to direct connection IP
-        client_ip = request.client.host
+        if request.client is not None:
+            client_ip = request.client.host
+        else:
+            client_ip = "0.0.0.0"
 
     # Try to resolve hostname
     try:
@@ -166,9 +175,9 @@ def register_url(
     filename: str,
     hostname: str,
     port: int,
-    path: Optional[str] = "",
-    protocol: Optional[str] = "",
-    name: Optional[str] = "",
+    path: str = "",
+    protocol: str = "",
+    name: str = "",
 ):
     path_if_valid = f"/{path}" if path else ""
     protocol_if_valid = f"{protocol}" if protocol else "http://"
@@ -224,7 +233,9 @@ def register_url(
             logger.error(f"Error writing to server list file {filename}: {e}")
             return {"status": f"{msg_base} (warning: could not save to disk)"}
 
-    return {"status": f"{msg_base}"}
+        return {"status": f"{msg_base}"}
+    else:
+        return {"status": f"ERROR: No file name provided"}
 
 
 async def register_post(filename: str, request: Request, data: RegistrationRequest):
@@ -522,3 +533,12 @@ def list_server_urls() -> list[str]:
 async def list_server_tools(urls: list[str]):
     workbenches = [McpWorkbench(SseServerParams(url=server)) for server in urls]
     return await _list_wb_tools(workbenches)
+
+
+def get_asgi_app(mcp: FastMCP):
+    asgi_app = (
+        getattr(mcp, "sse_app", None)
+        or getattr(mcp, "asgi_app", None)
+        or getattr(mcp, "_app", None)
+    )
+    return asgi_app
