@@ -1,0 +1,37 @@
+{
+  "name": "lcc-conductor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable orchestrator and MCP tool server settings component",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "lucide-react": "^0.263.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "react": "^18.0.0",
+    "lucide-react": "^0.263.1",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "react",
+    "settings",
+    "orchestrator",
+    "mcp",
+    "tool-servers"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/orchestrator-settings-component"
+  },
+  "license": "MIT"
+}
