@@ -1,4 +1,4 @@
-import { BackendOption, MoleculeNameOption } from './types';
+import { BackendOption, MoleculeNameOption } from './types.js';
 
 export const BACKEND_OPTIONS: BackendOption[] = [
   {

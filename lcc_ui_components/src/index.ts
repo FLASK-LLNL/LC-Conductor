@@ -1,7 +1,7 @@
 // Main entry point for orchestrator-settings-component
 
-export { SettingsButton } from './SettingsButton';
-export { BACKEND_OPTIONS, MOLECULE_NAME_OPTIONS } from './constants';
+export { SettingsButton } from './SettingsButton.js';
+export { BACKEND_OPTIONS, MOLECULE_NAME_OPTIONS } from './constants.js';
 export type {
   ToolServer,
   MoleculeNameFormat,
@@ -9,4 +9,4 @@ export type {
   BackendOption,
   MoleculeNameOption,
   SettingsButtonProps
-} from './types';
+} from './types.js';
