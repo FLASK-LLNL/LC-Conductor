@@ -1,12 +1,13 @@
-// TypeScript interfaces and types
-// import { RDKitModule } from '@rdkit/rdkit';
-// import { NODE_STYLES } from "./constants";
-// import { Dispatch, SetStateAction } from 'react';
+import { Dispatch, SetStateAction } from 'react';
+
+// ============================================================================
+// Settings Types
+// ============================================================================
 
 export interface ToolServer {
   id: string;
   url: string;
-  name?: string;  // Optional display name
+  name?: string;
 }
 
 export type MoleculeNameFormat = 'brand' | 'iupac' | 'formula' | 'smiles';
@@ -43,5 +44,44 @@ export interface SettingsButtonProps {
   initialSettings?: Partial<OrchestratorSettings>;
   username?: string;
   className?: string;
-  httpServerUrl: string;  // Required: base URL for backend API calls
+  httpServerUrl: string;
+}
+
+// ============================================================================
+// Sidebar Types
+// ============================================================================
+
+export interface SidebarMessage {
+  id: number;
+  timestamp: string;
+  message: string;
+  smiles: string | null;
+  source: string;
+}
+
+export interface VisibleSources {
+  [key: string]: boolean;
+}
+
+export interface SidebarState {
+  messages: SidebarMessage[];
+  setMessages: Dispatch<SetStateAction<SidebarMessage[]>>;
+  sourceFilterOpen: boolean;
+  setSourceFilterOpen: Dispatch<SetStateAction<boolean>>;
+  visibleSources: VisibleSources;
+  setVisibleSources: Dispatch<SetStateAction<VisibleSources>>;
+}
+
+export interface SidebarProps extends SidebarState {
+  setSidebarOpen: Dispatch<SetStateAction<boolean>>;
+  rdkitModule?: any;  // Optional RDKit module (for backwards compatibility)
+}
+
+// ============================================================================
+// Markdown Types
+// ============================================================================
+
+export interface MarkdownTextProps {
+  text: string;
+  className?: string;
 }

@@ -24,13 +24,20 @@ export default defineConfig({
         'react',
         'react-dom',
         'react/jsx-runtime',
-        'lucide-react'
+        'lucide-react',
+        'react-markdown',
+        'remark-gfm',
+        'react-syntax-highlighter',
+        'react-syntax-highlighter/dist/esm/styles/prism'
       ],
       output: {
         globals: {
           react: 'React',
           'react-dom': 'ReactDOM',
-          'lucide-react': 'LucideReact'
+          'lucide-react': 'LucideReact',
+          'react-markdown': 'ReactMarkdown',
+          'remark-gfm': 'remarkGfm',
+          'react-syntax-highlighter': 'SyntaxHighlighter'
         }
       }
     },
