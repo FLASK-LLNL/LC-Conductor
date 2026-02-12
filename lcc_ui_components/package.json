@@ -1,5 +1,5 @@
 {
-  "name": "lcc-conductor",
+  "name": "lc-conductor",
   "version": "0.1.0",
   "private": true,
   "description": "Reusable React components for orchestrator settings, reasoning sidebar, and markdown rendering",
