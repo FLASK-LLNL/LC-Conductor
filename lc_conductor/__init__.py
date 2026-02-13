@@ -9,6 +9,7 @@ from lc_conductor.tool_registration import (
     delete_registered_server,
     get_registered_servers,
 )
+from lc_conductor.backend_helper_function import RunSettings
 
 __all__ = [
     "ActionManager",
@@ -21,4 +22,5 @@ __all__ = [
     "check_registered_servers",
     "delete_registered_server",
     "get_registered_servers",
+    "RunSettings",
 ]

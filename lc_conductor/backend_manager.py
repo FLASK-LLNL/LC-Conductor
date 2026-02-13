@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Tuple
+from typing import Any, Literal, Optional, Tuple
 from fastapi import WebSocket
 import asyncio
 import os
@@ -14,6 +14,7 @@ from lc_conductor.tool_registration import (
     list_server_urls,
     list_server_tools,
 )
+from lc_conductor.backend_helper_function import RunSettings
 
 # Mapping from backend name to human-readable labels. Mirrored from the frontend
 BACKEND_LABELS = {
@@ -140,14 +141,17 @@ class ActionManager:
         self.experiment = experiment
         self.args = args
         self.username = username
-        self.molecule_name_format: Literal["brand", "iupac", "formula", "smiles"] = (
-            "brand"
-        )
+        self.run_settings: RunSettings = RunSettings()
         self.websocket = task_manager.websocket
 
-    async def handle_save_state(self, *args, **kwargs) -> None:
+    def setup_run_settings(self, data: dict[str, Any]):
+        if "runSettings" in data:
+            self.run_settings = RunSettings(**data["runSettings"])
+        
+    async def handle_save_state(self, data, *args, **kwargs) -> None:
         """Handle save state action."""
         logger.info("Save state action received")
+        self.setup_run_settings(data)
 
         experiment_context = await self.experiment.save_state()
         await self.websocket.send_json(
@@ -225,9 +229,6 @@ class ActionManager:
     async def handle_orchestrator_settings_update(self, data: dict) -> None:
         from charge.experiments.AutoGenExperiment import AutoGenExperiment
         from charge.clients.autogen import AutoGenPool
-
-        if "moleculeName" in data:
-            self.molecule_name_format = data["moleculeName"]
 
         backend = data["backend"]
         model = data["model"]

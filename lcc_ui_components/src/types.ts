@@ -7,7 +7,7 @@ import { Dispatch, SetStateAction } from 'react';
 export interface ToolServer {
   id: string;
   url: string;
-  name?: string;
+  name?: string;  // Optional display name
 }
 
 export type MoleculeNameFormat = 'brand' | 'iupac' | 'formula' | 'smiles';
