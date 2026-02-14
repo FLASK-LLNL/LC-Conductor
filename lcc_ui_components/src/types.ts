@@ -10,8 +10,6 @@ export interface ToolServer {
   name?: string;  // Optional display name
 }
 
-export type MoleculeNameFormat = 'brand' | 'iupac' | 'formula' | 'smiles';
-
 export interface OrchestratorSettings {
   backend: string;
   useCustomUrl: boolean;
@@ -20,7 +18,6 @@ export interface OrchestratorSettings {
   useCustomModel?: boolean;
   apiKey: string;
   backendLabel: string;
-  moleculeName?: MoleculeNameFormat;
   toolServers?: ToolServer[];
 }
 

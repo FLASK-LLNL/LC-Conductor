@@ -56,10 +56,3 @@ export const BACKEND_OPTIONS: BackendOption[] = [
     models: ['']
   },
 ];
-
-export const MOLECULE_NAME_OPTIONS: MoleculeNameOption[] = [
-  { value: 'brand', label: 'Brand/Common Name' },
-  { value: 'iupac', label: 'IUPAC Name' },
-  { value: 'formula', label: 'Chemical Formula' },
-  { value: 'smiles', label: 'SMILES' }
-];

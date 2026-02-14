@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Trash2, Edit2, Loader2, Settings, Wrench } from 'lucide-react';
 import { OrchestratorSettings, ToolServer, SettingsButtonProps } from './types.js';
-import { BACKEND_OPTIONS, MOLECULE_NAME_OPTIONS } from './constants.js';
+import { BACKEND_OPTIONS } from './constants.js';
 
 export const SettingsButton: React.FC<SettingsButtonProps> = ({
   onClick,
@@ -31,7 +31,6 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     model: 'gpt-5.1',
     useCustomModel: false,
     apiKey: '',
-    moleculeName: 'brand',
     toolServers: [],
     ...initialSettings
   };
@@ -849,29 +848,6 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                   />
                 </div>
 
-                {/* Divider */}
-                <div className="dropdown-divider"></div>
-
-                {/* Molecule Name Preference */}
-                <div className="form-group">
-                  <label className="form-label">
-                    Preferred Molecule Name Format
-                  </label>
-                  <select
-                    value={tempSettings.moleculeName || 'brand'}
-                    onChange={(e) => setTempSettings({...tempSettings, moleculeName: e.target.value as any})}
-                    className="form-select"
-                  >
-                    {MOLECULE_NAME_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="helper-text">
-                    Choose how molecule names are displayed throughout the application
-                  </p>
-                </div>
                 </div>
               )}
 
