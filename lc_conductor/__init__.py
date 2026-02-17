@@ -1,3 +1,10 @@
+###############################################################################
+## Copyright 2025-2026 Lawrence Livermore National Security, LLC.
+## See the top-level LICENSE file for details.
+##
+## SPDX-License-Identifier: Apache-2.0
+###############################################################################
+
 from lc_conductor.backend_manager import ActionManager, TaskManager
 from lc_conductor.callback_logger import CallbackLogger
 from lc_conductor.tool_registration import (

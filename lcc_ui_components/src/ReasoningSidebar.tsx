@@ -1,3 +1,10 @@
+//#############################################################################
+// Copyright 2025-2026 Lawrence Livermore National Security, LLC.
+// See the top-level LICENSE file for details.
+//
+// SPDX-License-Identifier: Apache-2.0
+//#############################################################################
+
 import React, { useRef, useEffect, useState } from 'react';
 import { X, Brain } from 'lucide-react';
 import { MarkdownText } from './MarkdownText.js';
