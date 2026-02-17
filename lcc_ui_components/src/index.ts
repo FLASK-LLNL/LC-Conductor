@@ -23,5 +23,5 @@ export type {
   VisibleSources,
 
   // Markdown types
-  MarkdownTextProps
+  MarkdownTextProps,
 } from './types.js';

@@ -13,7 +13,7 @@ from lc_conductor.backend_helper_function import RunSettings
 
 __all__ = [
     "ActionManager",
-    "TaskManager", 
+    "TaskManager",
     "CallbackLogger",
     "ToolList",
     "list_server_urls",

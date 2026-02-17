@@ -9,15 +9,15 @@ export default defineConfig({
     dts({
       insertTypesEntry: true,
       include: ['src/**/*.ts', 'src/**/*.tsx'],
-      exclude: ['node_modules', 'dist']
-    })
+      exclude: ['node_modules', 'dist'],
+    }),
   ],
   build: {
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'LCCConductor',
       formats: ['es'],
-      fileName: 'index'
+      fileName: 'index',
     },
     rollupOptions: {
       external: [
@@ -28,7 +28,7 @@ export default defineConfig({
         'react-markdown',
         'remark-gfm',
         'react-syntax-highlighter',
-        'react-syntax-highlighter/dist/esm/styles/prism'
+        'react-syntax-highlighter/dist/esm/styles/prism',
       ],
       output: {
         globals: {
@@ -37,11 +37,11 @@ export default defineConfig({
           'lucide-react': 'LucideReact',
           'react-markdown': 'ReactMarkdown',
           'remark-gfm': 'remarkGfm',
-          'react-syntax-highlighter': 'SyntaxHighlighter'
-        }
-      }
+          'react-syntax-highlighter': 'SyntaxHighlighter',
+        },
+      },
     },
     sourcemap: true,
-    emptyOutDir: true
-  }
+    emptyOutDir: true,
+  },
 });

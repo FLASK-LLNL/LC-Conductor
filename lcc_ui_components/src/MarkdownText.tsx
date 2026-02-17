@@ -22,21 +22,14 @@ const markdownComponents = {
     // Multi-line code block with syntax highlighting
     if (!inline && match) {
       return (
-        <SyntaxHighlighter
-          style={vscDarkPlus}
-          language={match[1]}
-          PreTag="div"
-          {...props}
-        >
+        <SyntaxHighlighter style={vscDarkPlus} language={match[1]} PreTag="div" {...props}>
           {String(children).replace(/\n$/, '')}
         </SyntaxHighlighter>
       );
     }
 
     // Single- or Multi-line code block without language
-    return (
-      <code {...props}>{children}</code>
-    );
+    return <code {...props}>{children}</code>;
   },
   table: ({ children }: any) => <table className="markdown-table">{children}</table>,
   th: ({ children }: any) => <th className="markdown-table-header">{children}</th>,
@@ -45,9 +38,9 @@ const markdownComponents = {
 
 /**
  * MarkdownText Component
- * 
+ *
  * Renders markdown text with syntax highlighting and custom styling.
- * 
+ *
  * @example
  * ```tsx
  * <MarkdownText text="# Hello\n\nThis is **bold** text." />
@@ -56,10 +49,7 @@ const markdownComponents = {
 export const MarkdownText: React.FC<MarkdownTextProps> = ({ text }) => {
   return (
     <div className="markdown-content space-y-2">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={markdownComponents}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
         {text}
       </ReactMarkdown>
     </div>

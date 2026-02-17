@@ -7,7 +7,7 @@ import { Dispatch, SetStateAction } from 'react';
 export interface ToolServer {
   id: string;
   url: string;
-  name?: string;  // Optional display name
+  name?: string; // Optional display name
 }
 
 export interface OrchestratorSettings {
@@ -71,7 +71,7 @@ export interface SidebarState {
 
 export interface SidebarProps extends SidebarState {
   setSidebarOpen: Dispatch<SetStateAction<boolean>>;
-  rdkitModule?: any;  // Optional RDKit module (for backwards compatibility)
+  rdkitModule?: any; // Optional RDKit module (for backwards compatibility)
 }
 
 // ============================================================================

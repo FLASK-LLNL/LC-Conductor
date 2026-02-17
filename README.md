@@ -3,15 +3,16 @@
 ## Installation
 
 To install the package, clone the repository and run:
+
 ```bash
 pip install -e .
 ```
 
 Or install directly from GitHub:
+
 ```bash
 pip install git+https://github.com/FLASK-LLNL/LC-Conductor.git
 ```
-
 
 # License
 
