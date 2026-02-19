@@ -15,6 +15,7 @@ from lc_conductor.tool_registration import (
     check_registered_servers,
     delete_registered_server,
     get_registered_servers,
+    try_get_public_hostname,
 )
 from lc_conductor.backend_helper_function import RunSettings
 
@@ -29,5 +30,6 @@ __all__ = [
     "check_registered_servers",
     "delete_registered_server",
     "get_registered_servers",
+    "try_get_public_hostname",
     "RunSettings",
 ]
