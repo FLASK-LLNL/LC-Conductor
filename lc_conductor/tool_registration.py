@@ -49,7 +49,7 @@ def split_url(url: str) -> Tuple[str, int, str, str]:
     if match:
         protocol = match.group(1) or ""
         host = match.group(2)
-        port = int(match.group(3)) or 0
+        port = int(match.group(3) or 0)
         path = match.group(4) or ""
     else:
         raise ValueError(
@@ -542,3 +542,20 @@ def get_asgi_app(mcp: FastMCP):
         or getattr(mcp, "_app", None)
     )
     return asgi_app
+
+
+def try_get_public_hostname():
+    import socket
+
+    hostname = socket.gethostname()
+    try:
+        public_hostname = hostname + "-pub"
+        host = socket.gethostbyname(public_hostname)
+        hostname = public_hostname
+    except socket.gaierror as e:
+        try:
+            host = socket.gethostbyname(hostname)
+        except socket.gaierror as e:
+            host = "127.0.0.1"
+
+    return hostname, host
