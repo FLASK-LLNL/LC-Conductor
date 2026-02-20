@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lc_conductor"
 version = "0.1.0"
-description = "LC-Conductor: Chemistry-tool for Automated Reasoning and Generation"
+description = "LC-Conductor: Core components for integrating Agentic frameworks with web UI components with optimizations for Livermore Computing."
 authors = []
 license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.11, <3.13"
 dependencies = [
-    "charge @ git+https://github.com/FLASK-LLNL/ChARGe.git",
+    "charge>=0.1.0",
     "mcp>=1.10.0",
     "jsonschema>=4.17.3",
     "loguru>=0.7.0",
