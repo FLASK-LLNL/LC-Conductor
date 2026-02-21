@@ -246,7 +246,8 @@ async def register_post(filename: str, request: Request, data: RegistrationReque
 
 
 def register_tool_server(port, host, name, copilot_port, copilot_host):
-    for i in range(5):
+    max_retries = 1
+    for i in range(max_retries):
         try:
             try:
                 url = f"https://{copilot_host}:{copilot_port}/register"
@@ -261,7 +262,7 @@ def register_tool_server(port, host, name, copilot_port, copilot_host):
             logger.info(response.json())
             break
         except:
-            if i == 4:
+            if i == max_retries:
                 logger.error("Could not connect to server for registration! Exiting")
                 raise
             logger.info(
