@@ -11,7 +11,7 @@ license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.11, <3.13"
 dependencies = [
-    "charge>=0.1.0",
+    "charge[all]>=0.1.0",
     "mcp>=1.10.0",
     "jsonschema>=4.17.3",
     "loguru>=0.7.0",
@@ -28,3 +28,5 @@ include = ["lc_conductor*"]
 [project.optional-dependencies]
 autogen = ["autogen-agentchat>=0.7.0", "autogen-core>=0.7.0", "autogen-ext>=0.7.0", "openai>=2.0.0", "tiktoken>=0.10.0", "autogen-ext[openai]"]
 test = ["pytest", "pytest-asyncio", "pytest-mock", "responses", "httpx", "requests-mock"]
+
+all = ["lc-conductor[autogen]"]
