@@ -25,10 +25,27 @@ from charge.utils.mcp_workbench_utils import (
 )
 
 from charge.utils.system_utils import check_server_paths
-from autogen_ext.tools.mcp import McpWorkbench, SseServerParams
-from charge.clients.autogen_utils import (
-    _list_wb_tools,
-)
+from contextlib import asynccontextmanager
+
+from mcp.client import sse, streamable_http
+from mcp import ClientSession
+
+
+@asynccontextmanager
+async def connect_to_mcp_server(url: str):
+    # Try Streamable HTTP first, fall back to SSE
+    try:
+        async with streamable_http.streamable_http_client(url) as (r, w, sid):
+            yield r, w, sid
+    except Exception:
+        async with sse.sse_client(url) as (r, w):
+            yield r, w, None
+
+
+async def get_mcp_tools(url: str):
+    async with connect_to_mcp_server(url) as (read_stream, write_stream, _):
+        async with ClientSession(read_stream, write_stream) as session:
+            return await session.list_tools()
 
 
 class ValidateMCPServerRequest(BaseModel):
@@ -531,9 +548,19 @@ def list_server_urls() -> list[str]:
     return server_urls
 
 
-async def list_server_tools(urls: list[str]):
-    workbenches = [McpWorkbench(SseServerParams(url=server)) for server in urls]
-    return await _list_wb_tools(workbenches)
+async def list_server_tools(urls: list[str]) -> list[tuple[str, str]]:
+    """
+    Returns all MCP server tools available.
+
+    :param urls: A list of server URLs
+    :return: A list of (tool name, server) 2-tuples.
+    """
+    result = []
+    for url in urls:
+        tools = await get_mcp_tools(url)
+        result.extend((t.name, url) for t in tools.tools)
+
+    return result
 
 
 def get_asgi_app(mcp: FastMCP):
