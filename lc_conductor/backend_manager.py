@@ -12,10 +12,10 @@ import os
 from loguru import logger
 from lc_conductor.callback_logger import CallbackLogger
 from concurrent.futures import ProcessPoolExecutor
-from charge.experiments.AutoGenExperiment import AutoGenExperiment
-from charge.clients.autogen_utils import chargeConnectionError
+from charge.experiments.experiment import Experiment
+from charge.clients.agent_factory import AgentFactory
+from charge.clients.autogen import AutoGenBackend
 
-# from charge.tasks.Task import Task
 from functools import partial
 from lc_conductor.tool_registration import (
     ToolList,
@@ -83,16 +83,10 @@ class TaskManager:
             }
         )
 
-        if type(exc) == chargeConnectionError:
-            # logger.error(f"Charge connection error in background task: {exc}")
-            await self.clogger.info(
-                f"Unsupported model was selected.  \n Server encountered error: {exc}"
-            )
-        else:
-            # Log other exceptions for debugging
-            logger.exception(
-                f"Unexpected error in background task: {type(exc).__name__}: {exc}"
-            )
+        # Log other exceptions for debugging
+        logger.exception(
+            f"Unexpected error in background task: {type(exc).__name__}: {exc}"
+        )
 
         # Send a stopped message with error details to the websocket so the UI can react
         try:
@@ -141,7 +135,7 @@ class ActionManager:
     def __init__(
         self,
         task_manager: TaskManager,
-        experiment: AutoGenExperiment,
+        experiment: Experiment,
         args,
         username: str,
     ):
@@ -205,14 +199,11 @@ class ActionManager:
         )
 
     async def report_orchestrator_config(self) -> Tuple[str, str, str]:
-        agent_pool = self.experiment.agent_pool
-        # Access the raw config
-        raw_config = agent_pool.model_client._raw_config
+        agent_backend = AgentFactory.default_backend()
         # Access specific fields
-        base_url = raw_config.get("base_url")
-        model = raw_config.get("model")
-        api_key = raw_config.get("api_key")
-        if agent_pool.backend in ["livai", "livchat", "llamame", "alcf"]:
+        base_url = agent_backend.base_url
+        model = agent_backend.model
+        if agent_backend.backend in ["livai", "livchat", "llamame", "alcf"]:
             useCustomUrl = True
         else:
             useCustomUrl = False
@@ -220,9 +211,9 @@ class ActionManager:
             {
                 "type": "server-update-orchestrator-settings",
                 "orchestratorSettings": {
-                    "backend": agent_pool.backend,
+                    "backend": agent_backend.backend,
                     "backendLabel": BACKEND_LABELS.get(
-                        agent_pool.backend, agent_pool.backend
+                        agent_backend.backend, agent_backend.backend
                     ),
                     "useCustomUrl": useCustomUrl,
                     "customUrl": base_url if base_url else "",
@@ -232,11 +223,9 @@ class ActionManager:
                 },
             }
         )
-        return agent_pool.backend, model, base_url
+        return agent_backend.backend, model, base_url
 
     async def handle_orchestrator_settings_update(self, data: dict) -> None:
-        from charge.experiments.AutoGenExperiment import AutoGenExperiment
-        from charge.clients.autogen import AutoGenPool
 
         backend = data["backend"]
         model = data["model"]
@@ -253,11 +242,14 @@ class ActionManager:
 
         try:
             logger.info(f"Experiment is reset with model {model} and backend {backend}")
-            autogen_pool = AutoGenPool(
-                model=model, backend=backend, api_key=api_key, base_url=base_url
+            AgentFactory.register_backend(
+                "autogen",
+                AutoGenBackend(
+                    model=model, backend=backend, api_key=api_key, base_url=base_url
+                ),
             )
             # Set up an experiment class for current endpoint
-            self.experiment = AutoGenExperiment(task=None, agent_pool=autogen_pool)
+            self.experiment = Experiment(task=None)
 
             await self.websocket.send_json(
                 {
