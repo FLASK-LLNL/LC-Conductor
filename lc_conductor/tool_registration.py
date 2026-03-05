@@ -40,30 +40,6 @@ class DeleteMCPServerRequest(BaseModel):
     url: str
 
 
-def split_url(url: str) -> Tuple[str, int, str, str]:
-    # Regular expression pattern
-    pattern = r"^(https?://)?([^:/]+)(?::(\d+))?(?:/(.+?))?/?$"
-
-    match = re.match(pattern, url)
-
-    if match:
-        protocol = match.group(1) or ""
-        host = match.group(2)
-        port = int(match.group(3) or 0)
-        path = match.group(4) or ""
-    else:
-        raise ValueError(
-            f"Unusable URL provide {url} -- requires either a port or a path"
-        )
-
-    if not port and not path:
-        raise ValueError(
-            f"Unusable URL provide {url} -- requires either a port or a path"
-        )
-
-    return host, port, path, protocol
-
-
 @dataclass
 class ToolList:
     server: str
@@ -74,22 +50,11 @@ class ToolList:
 
 
 class ToolServer(BaseModel):
-    address: str
-    port: int
-    path: str
+    url: str
     name: str
-    protocol: Optional[str] = None
 
     def __str__(self):
-        path_if_valid = f"/{self.path}" if self.path else ""
-        protocol_if_valid = f"{self.protocol}" if self.protocol else "http://"
-        # Ensure path ends with /mcp
-        mcp_path_if_valid = (
-            path_if_valid
-            if path_if_valid.endswith("/mcp")
-            else f"{path_if_valid.rstrip('/')}/mcp"
-        )
-        return f"{protocol_if_valid}{self.address}:{self.port}{mcp_path_if_valid}"
+        return self.url
 
     def long_name(self):
         short_name = self.__str__()
@@ -129,7 +94,7 @@ def get_client_info(request: Request):
 class RegistrationRequest:
     host: str
     port: int
-    name: str
+    name: str  # Should this be path
 
 
 def reload_server_list(filename: str):
@@ -173,18 +138,11 @@ def reload_server_list(filename: str):
 
 def register_url(
     filename: str,
-    hostname: str,
-    port: int,
-    path: str = "",
-    protocol: str = "",
+    url: str,
     name: str = "",
 ):
-    path_if_valid = f"/{path}" if path else ""
-    protocol_if_valid = f"{protocol}" if protocol else "http://"
-    key = f"{protocol_if_valid}{hostname}:{port}{path_if_valid}"
-    new_server = ToolServer(
-        address=hostname, port=port, path=path, name=name, protocol=protocol
-    )
+    key = url
+    new_server = ToolServer(url=url, name=name)
 
     old_server = SERVERS.servers.pop(key, None)
     if old_server:
@@ -242,7 +200,13 @@ async def register_post(filename: str, request: Request, data: RegistrationReque
     hostname = data.host
     if not hostname:
         hostname = get_client_info(request)
-    return register_url(filename, hostname, data.port, data.name)
+
+    url = f"http://{hostname}"
+    if data.port:
+        url += f":{data.port}"
+    if data.name:
+        url += f"/{data.name}"
+    return register_url(filename, url, data.name)
 
 
 def register_tool_server(port, host, name, copilot_port, copilot_host):
@@ -344,12 +308,6 @@ async def validate_and_register_mcp_server(
     Returns:
         Dict with status, tools (if successful), and error message (if failed)
     """
-    # Parse the URL
-    try:
-        host, port, path, protocol = split_url(url)
-    except ValueError as e:
-        return {"status": "error", "error": str(e)}
-
     # Ensure URL ends with /mcp
     mcp_url = url if url.endswith("/mcp") else f"{url.rstrip('/')}/mcp"
 
@@ -359,11 +317,9 @@ async def validate_and_register_mcp_server(
 
         # If validation successful, register the server
         if not name:
-            name = f"{host}:{port}"
+            name = mcp_url
 
-        registration_result = register_url(
-            filename, host, int(port) if port else 80, path, protocol, name
-        )
+        registration_result = register_url(filename, mcp_url, name)
 
         return {
             "status": "connected",
@@ -373,8 +329,8 @@ async def validate_and_register_mcp_server(
         }
 
     except Exception as e:
-        logger.error(f"Failed to validate MCP server at {mcp_url}: {e}")
-        return {"status": "disconnected", "error": str(e), "url": mcp_url}
+        logger.error(f"Failed to validate MCP server at {url}: {e}")
+        return {"status": "disconnected", "error": str(e), "url": url}
 
 
 async def check_registered_servers(filename: str) -> Dict[str, Dict]:
@@ -480,7 +436,6 @@ async def validate_mcp_server_endpoint(
     This endpoint uses the existing system_utils.check_url_exists() and
     mcp_workbench_utils for validation.
     """
-
     # Get client info for logging
     client_info = get_client_info(request)
     logger.info(f"validate request from {client_info} for MCP server: {data.url}")
@@ -496,8 +451,6 @@ async def delete_mcp_server_endpoint(
     filename: str, request: Request, data: DeleteMCPServerRequest
 ):
     """Delete a registered MCP server."""
-    from tool_registration import delete_registered_server
-
     client_info = get_client_info(request)
     logger.info(f"Delete request from {client_info} for MCP server: {data.url}")
 
@@ -532,19 +485,13 @@ def list_server_urls() -> list[str]:
 
 
 async def list_server_tools(urls: list[str]):
+    wh_token = os.getenv("FLASK_WORMHOLE_TOKEN", None)
+    wh_header = {"X-Token": wh_token} if wh_token else {}
     workbenches = [
-        McpWorkbench(StreamableHttpServerParams(url=server)) for server in urls
+        McpWorkbench(StreamableHttpServerParams(url=server, headers=wh_header))
+        for server in urls
     ]
     return await _list_wb_tools(workbenches)
-
-
-def get_asgi_app(mcp: FastMCP):
-    asgi_app = (
-        getattr(mcp, "mcp_app", None)
-        or getattr(mcp, "asgi_app", None)
-        or getattr(mcp, "_app", None)
-    )
-    return asgi_app
 
 
 def try_get_public_hostname():
