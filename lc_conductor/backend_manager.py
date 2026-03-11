@@ -149,7 +149,7 @@ class ActionManager:
 
     async def handle_save_state(self, data, *args, **kwargs) -> None:
         """Handle save state action."""
-        logger.info("Save state action received")
+        logger.trace("Save state action received")
         self.setup_run_settings(data)
 
         experiment_context = await self.experiment.save_state()
@@ -159,10 +159,10 @@ class ActionManager:
 
     async def handle_load_state(self, data, *args, **kwargs) -> None:
         """Handle load state action."""
-        logger.info("Load state action received")
+        logger.trace("Load state action received")
         experiment_context = data.get("experimentContext")
         if not experiment_context:
-            logger.error("No experiment context provided for loading state")
+            logger.debug("No experiment context provided for loading state")
             return
         await self.experiment.load_state(experiment_context)
 
