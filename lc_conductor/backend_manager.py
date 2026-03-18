@@ -9,6 +9,7 @@ from typing import Any, Literal, Optional, Tuple
 from fastapi import WebSocket
 import asyncio
 import os
+import re
 import traceback
 from loguru import logger
 from lc_conductor.callback_logger import CallbackLogger
@@ -24,6 +25,7 @@ from lc_conductor.tool_registration import (
     list_server_tools,
 )
 from lc_conductor.backend_helper_function import RunSettings
+from lc_conductor.hpc_allocation import execute_hpc_allocation_from_env
 
 # Mapping from backend name to human-readable labels. Mirrored from the frontend
 BACKEND_LABELS = {
@@ -319,4 +321,152 @@ class ActionManager:
                 "type": "get-username-response",
                 "username": self.username,
             }
+        )
+
+    async def handle_allocate_hpc_resources(self, data: dict) -> None:
+        request_id = data.get("requestId")
+        allocation = data.get("allocation") or {}
+
+        # timestamp: keep consistent with curl executor tests ("...Z")
+        from datetime import datetime
+
+        def _result_payload(
+            *,
+            executed_curl: str | None,
+            result: dict,
+            allocation_echo: dict,
+        ) -> dict:
+            payload = {
+                "type": "allocate-hpc-resources-result",
+                "requestId": request_id,
+                "allocation": allocation_echo,
+                "result": result,
+            }
+            if executed_curl:
+                payload["executedCurl"] = executed_curl
+            return payload
+
+        if not isinstance(request_id, str) or not request_id.strip():
+            await self.websocket.send_json(
+                _result_payload(
+                    executed_curl=None,
+                    result={
+                        "success": False,
+                        "error": "Missing or invalid requestId",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    },
+                    allocation_echo=allocation if isinstance(allocation, dict) else {},
+                )
+            )
+            return
+
+        if not isinstance(allocation, dict):
+            await self.websocket.send_json(
+                _result_payload(
+                    executed_curl=None,
+                    result={
+                        "success": False,
+                        "error": "Missing or invalid allocation object",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    },
+                    allocation_echo={},
+                )
+            )
+            return
+
+        system = allocation.get("system")
+        nodes = allocation.get("nodes")
+        wall_time = allocation.get("time")
+        bank = allocation.get("bank")
+
+        if not isinstance(system, str) or not system.strip():
+            await self.websocket.send_json(
+                _result_payload(
+                    executed_curl=None,
+                    result={
+                        "success": False,
+                        "error": "Missing or invalid system",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    },
+                    allocation_echo=allocation,
+                )
+            )
+            return
+
+        try:
+            # Accept int or numeric string.
+            if isinstance(nodes, str):
+                if not re.fullmatch(r"\d+", nodes.strip()):
+                    raise ValueError("nodes must be a positive integer")
+                nodes_int = int(nodes.strip())
+            elif isinstance(nodes, int):
+                nodes_int = nodes
+            else:
+                raise ValueError("nodes must be a positive integer")
+
+            if nodes_int < 1:
+                raise ValueError("nodes must be >= 1")
+        except ValueError as e:
+            await self.websocket.send_json(
+                _result_payload(
+                    executed_curl=None,
+                    result={
+                        "success": False,
+                        "error": str(e),
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    },
+                    allocation_echo=allocation,
+                )
+            )
+            return
+
+        if not isinstance(wall_time, str) or not wall_time.strip():
+            await self.websocket.send_json(
+                _result_payload(
+                    executed_curl=None,
+                    result={
+                        "success": False,
+                        "error": "Missing or invalid time",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    },
+                    allocation_echo=allocation,
+                )
+            )
+            return
+
+        if not isinstance(bank, str) or not bank.strip():
+            await self.websocket.send_json(
+                _result_payload(
+                    executed_curl=None,
+                    result={
+                        "success": False,
+                        "error": "Missing or invalid bank",
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    },
+                    allocation_echo=allocation,
+                )
+            )
+            return
+
+        allocation_echo = {
+            "system": system.strip(),
+            "nodes": nodes_int,
+            "time": wall_time.strip(),
+            "bank": bank.strip(),
+        }
+
+        executed_curl, result = await execute_hpc_allocation_from_env(
+            system=allocation_echo["system"],
+            nodes=allocation_echo["nodes"],
+            time=allocation_echo["time"],
+            bank=allocation_echo["bank"],
+            client_info=f"ws:{self.username}",
+        )
+
+        await self.websocket.send_json(
+            _result_payload(
+                executed_curl=executed_curl,
+                result=result,
+                allocation_echo=allocation_echo,
+            )
         )

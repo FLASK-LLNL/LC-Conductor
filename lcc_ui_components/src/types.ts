@@ -17,6 +17,48 @@ export interface ToolServer {
   name?: string; // Optional display name
 }
 
+export interface CurlExecutionResult {
+  success: boolean;
+  status_code?: number;
+  headers?: Record<string, string>;
+  body?: string;
+  error?: string;
+  execution_time_ms?: number;
+  timestamp: string;  // When executed
+}
+
+export interface HpcAllocation {
+  id: string;
+  system: string;
+  nodes: number;
+  time: string;
+  bank: string;
+}
+
+export interface HpcAllocationRequestMessage {
+  type: 'allocate-hpc-resources';
+  requestId: string;
+  allocation: {
+    system: string;
+    nodes: number;
+    time: string;
+    bank: string;
+  };
+}
+
+export interface HpcAllocationResultMessage {
+  type: 'allocate-hpc-resources-result';
+  requestId: string;
+  allocation: {
+    system: string;
+    nodes: number;
+    time: string;
+    bank: string;
+  };
+  executedCurl?: string;
+  result: CurlExecutionResult;
+}
+
 export interface OrchestratorSettings {
   backend: string;
   useCustomUrl: boolean;
@@ -26,6 +68,7 @@ export interface OrchestratorSettings {
   apiKey: string;
   backendLabel: string;
   toolServers?: ToolServer[];
+  hpcAllocations?: HpcAllocation[];
 }
 
 export interface BackendOption {
@@ -49,6 +92,7 @@ export interface SettingsButtonProps {
   username?: string;
   className?: string;
   httpServerUrl: string;
+  websocket?: WebSocket;
 }
 
 // ============================================================================

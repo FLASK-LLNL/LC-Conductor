@@ -6,9 +6,10 @@
 //#############################################################################
 
 import React from 'react';
-import { Plus, Trash2, Edit2, Loader2, Settings, Wrench } from 'lucide-react';
+import { Plus, Trash2, Edit2, Loader2, Settings, Wrench, Cpu } from 'lucide-react';
 import { OrchestratorSettings, ToolServer, SettingsButtonProps } from './types.js';
 import { BACKEND_OPTIONS } from './constants.js';
+import { AllocateHpcResources } from './allocate_hpc_resources.js';
 
 export const SettingsButton: React.FC<SettingsButtonProps> = ({
   onClick,
@@ -18,10 +19,13 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   initialSettings,
   username,
   httpServerUrl,
+  websocket,
   className = '',
 }) => {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<'orchestrator' | 'tools'>('orchestrator');
+  const [activeTab, setActiveTab] = React.useState<'orchestrator' | 'tools' | 'hpc'>(
+    'orchestrator',
+  );
   // Cache for storing backend-specific settings
   const [backendCache, setBackendCache] = React.useState<
     Record<
@@ -44,6 +48,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     useCustomModel: false,
     apiKey: '',
     toolServers: [],
+    hpcAllocations: [],
     ...initialSettings,
   };
 
@@ -720,10 +725,25 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                     <span className="notification-badge">{tempSettings.toolServers.length}</span>
                   )}
                 </button>
+                <button
+                  onClick={() => setActiveTab('hpc')}
+                  className={`btn btn-sm transition-colors ${
+                    activeTab === 'hpc' ? 'btn-primary' : 'btn-tertiary'
+                  }`}
+                >
+                  <Cpu className="w-4 h-4" />
+                  <span>HPC</span>
+                  {tempSettings.hpcAllocations && tempSettings.hpcAllocations.length > 0 && (
+                    <span className="notification-badge">{tempSettings.hpcAllocations.length}</span>
+                  )}
+                </button>
               </div>
             </div>
 
-            <div className="modal-body space-y-4">
+            <div
+              className="modal-body space-y-4"
+              style={{ maxHeight: '70vh', overflowY: 'auto', overflowX: 'hidden' }}
+            >
               {/* Orchestrator Tab */}
               {activeTab === 'orchestrator' && (
                 <div className="space-y-4">
@@ -1090,8 +1110,19 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                       <span>Add Tool Server</span>
                     </button>
                   )}
-                </div>
-              )}
+              </div>
+            )}
+
+            {/* HPC Tab */}
+            {activeTab === 'hpc' && (
+              <AllocateHpcResources
+                websocket={websocket}
+                savedAllocations={tempSettings.hpcAllocations || []}
+                onSavedAllocationsChange={(next) =>
+                  setTempSettings({ ...tempSettings, hpcAllocations: next })
+                }
+              />
+            )}
             </div>
 
             <div className="modal-footer">

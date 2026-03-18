@@ -22,6 +22,10 @@ export type {
   OrchestratorSettings,
   BackendOption,
   SettingsButtonProps,
+  CurlExecutionResult,
+  HpcAllocation,
+  HpcAllocationRequestMessage,
+  HpcAllocationResultMessage,
 
   // Sidebar types
   SidebarMessage,

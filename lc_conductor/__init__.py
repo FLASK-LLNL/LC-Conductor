@@ -18,6 +18,12 @@ from lc_conductor.tool_registration import (
     try_get_public_hostname,
 )
 from lc_conductor.backend_helper_function import RunSettings
+from lc_conductor.curl_parser import parse_curl_command
+from lc_conductor.curl_executor import execute_curl_command, execute_curl_endpoint_handler
+from lc_conductor.hpc_allocation import (
+    build_hpc_allocation_curl,
+    execute_hpc_allocation_from_env,
+)
 
 __all__ = [
     "ActionManager",
@@ -32,4 +38,9 @@ __all__ = [
     "get_registered_servers",
     "try_get_public_hostname",
     "RunSettings",
+    "parse_curl_command",
+    "execute_curl_command",
+    "execute_curl_endpoint_handler",
+    "build_hpc_allocation_curl",
+    "execute_hpc_allocation_from_env",
 ]

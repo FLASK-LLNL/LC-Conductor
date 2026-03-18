@@ -27,6 +27,15 @@ include = ["lc_conductor*"]
 
 [project.optional-dependencies]
 autogen = ["autogen-agentchat>=0.7.0", "autogen-core>=0.7.0", "autogen-ext>=0.7.0", "openai>=2.0.0", "tiktoken>=0.10.0", "autogen-ext[openai]"]
-test = ["pytest", "pytest-asyncio", "pytest-mock", "responses", "httpx", "requests-mock"]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.10.0",
+    "pytest-cov>=4.0.0",
+    "responses>=0.22.0",
+    "httpx>=0.24.0",
+    "requests-mock>=1.11.0",
+    "coverage[toml]>=7.0.0"
+]
 
-all = ["lc-conductor[autogen]"]
+all = ["lc-conductor[autogen,test]"]
