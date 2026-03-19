@@ -12,13 +12,14 @@ export const BACKEND_OPTIONS: BackendOption[] = [
     value: 'openai',
     label: 'OpenAI',
     defaultUrl: 'https://api.openai.com/v1',
-    models: ['gpt-5.2', 'gpt-5.1', 'gpt-5', 'gpt-5-mini', 'gpt-5-nano'],
+    models: ['gpt-5.4', 'gpt-5.2', 'gpt-5.1', 'gpt-5', 'gpt-5-mini', 'gpt-5-nano'],
   },
   {
     value: 'livai',
     label: 'LivAI',
     defaultUrl: '',
     models: [
+      'gpt-5.4',
       'gpt-5.2',
       'gpt-5.1',
       'gpt-5',

@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { Plus, Trash2, Edit2, Loader2, Settings, Wrench } from 'lucide-react';
-import { OrchestratorSettings, ToolServer, SettingsButtonProps } from './types.js';
+import { OrchestratorSettings, ReasoningEffort, ToolServer, SettingsButtonProps } from './types.js';
 import { BACKEND_OPTIONS } from './constants.js';
 
 export const SettingsButton: React.FC<SettingsButtonProps> = ({
@@ -29,6 +29,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
       {
         customUrl: string;
         model: string;
+        reasoningEffort: ReasoningEffort;
         useCustomModel: boolean;
       }
     >
@@ -40,7 +41,8 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     backendLabel: 'OpenAI',
     useCustomUrl: false,
     customUrl: '',
-    model: 'gpt-5.1',
+    model: 'gpt-5.4',
+    reasoningEffort: 'medium',
     useCustomModel: false,
     apiKey: '',
     toolServers: [],
@@ -238,6 +240,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
       [tempSettings.backend]: {
         customUrl: tempSettings.customUrl || '',
         model: tempSettings.model || '',
+        reasoningEffort: tempSettings.reasoningEffort,
         useCustomModel: tempSettings.useCustomModel || false,
       },
     };
@@ -260,6 +263,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
       backend: newBackend,
       customUrl: urlToUse,
       model: modelToUse,
+      reasoningEffort: cached?.reasoningEffort || 'medium',
       useCustomModel: useCustomModelToUse,
       backendLabel: newBackendOption!.label,
     });
@@ -287,6 +291,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
       [tempSettings.backend]: {
         customUrl: newUrl,
         model: tempSettings.model,
+        reasoningEffort: tempSettings.reasoningEffort,
         useCustomModel: tempSettings.useCustomModel || false,
       },
     };
@@ -305,6 +310,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
       [tempSettings.backend]: {
         customUrl: tempSettings.customUrl || '',
         model: selectedModel,
+        reasoningEffort: tempSettings.reasoningEffort,
         useCustomModel: tempSettings.useCustomModel || false,
       },
     };
@@ -349,6 +355,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
       [tempSettings.backend]: {
         customUrl: tempSettings.customUrl || '',
         model: modelToUse,
+        reasoningEffort: tempSettings.reasoningEffort,
         useCustomModel: enabled,
       },
     };
@@ -368,6 +375,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
       [tempSettings.backend]: {
         customUrl: tempSettings.customUrl || '',
         model: newModel,
+        reasoningEffort: tempSettings.reasoningEffort,
         useCustomModel: tempSettings.useCustomModel || false,
       },
     };
@@ -823,6 +831,29 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                         className="form-input"
                       />
                     )}
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">
+                      Reasoning Effort
+                      <span className="helper-text" style={{ marginLeft: '0.5rem' }}>
+                        (passed to backend as `reasoningEffort`)
+                      </span>
+                    </label>
+                    <select
+                      value={tempSettings.reasoningEffort}
+                      onChange={(e) =>
+                        setTempSettings({
+                          ...tempSettings,
+                          reasoningEffort: e.target.value as ReasoningEffort,
+                        })
+                      }
+                      className="form-select"
+                    >
+                      <option value="low">low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                    </select>
                   </div>
 
                   {/* Use Custom Model Checkbox */}

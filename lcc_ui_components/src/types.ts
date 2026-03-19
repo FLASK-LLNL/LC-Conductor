@@ -17,11 +17,14 @@ export interface ToolServer {
   name?: string; // Optional display name
 }
 
+export type ReasoningEffort = 'low' | 'medium' | 'high';
+
 export interface OrchestratorSettings {
   backend: string;
   useCustomUrl: boolean;
   customUrl?: string;
   model: string;
+  reasoningEffort: ReasoningEffort;
   useCustomModel?: boolean;
   apiKey: string;
   backendLabel: string;
