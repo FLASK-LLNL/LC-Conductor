@@ -19,7 +19,6 @@ export { BACKEND_OPTIONS } from './constants.js';
 export type {
   // Settings types
   ToolServer,
-  ReasoningEffort,
   OrchestratorSettings,
   BackendOption,
   SettingsButtonProps,

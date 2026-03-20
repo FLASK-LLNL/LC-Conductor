@@ -15,7 +15,7 @@ from lc_conductor.callback_logger import CallbackLogger
 from concurrent.futures import ProcessPoolExecutor
 from charge.experiments.experiment import Experiment
 from charge.clients.agent_factory import AgentFactory
-from charge.clients.agentframework import AgentFrameworkBackend
+from charge.clients.autogen import AutoGenBackend
 
 from functools import partial
 from lc_conductor.tool_registration import (
@@ -141,7 +141,6 @@ class ActionManager:
         self.args = args
         self.username = username
         self.run_settings: RunSettings = RunSettings()
-        self.reasoning_effort: Literal["low", "medium", "high"] = "medium"
         self.websocket = task_manager.websocket
 
     def setup_run_settings(self, data: dict[str, Any]):
@@ -216,9 +215,6 @@ class ActionManager:
                     "useCustomUrl": useCustomUrl,
                     "customUrl": base_url if base_url else "",
                     "model": model,
-                    "reasoningEffort": getattr(
-                        agent_backend, "reasoning_effort", self.reasoning_effort
-                    ),
                     "useCustomModel": False,
                     "apiKey": "",
                 },
@@ -232,8 +228,6 @@ class ActionManager:
         model = data["model"]
         base_url = data["customUrl"] if data["customUrl"] else None
         api_key = data["apiKey"] if data["apiKey"] else None
-        reasoning_effort = data.get("reasoningEffort") or "medium"
-        self.reasoning_effort = reasoning_effort
         await self.handle_reset()
 
         # Default to server defaults
@@ -244,19 +238,11 @@ class ActionManager:
                 base_url = os.getenv("FLASK_ORCHESTRATOR_URL", None)
 
         try:
-            logger.info(
-                f"Experiment is reset with model {model}, backend {backend}"
-                f", and reasoning effort {reasoning_effort}."
-            )
+            logger.info(f"Experiment is reset with model {model} and backend {backend}")
             AgentFactory.register_backend(
-                "agentframework",
-                AgentFrameworkBackend(
-                    model=model,
-                    backend=backend,
-                    api_key=api_key,
-                    base_url=base_url,
-                    use_responses_api=True,
-                    reasoning_effort=reasoning_effort,
+                "autogen",
+                AutoGenBackend(
+                    model=model, backend=backend, api_key=api_key, base_url=base_url
                 ),
             )
             # Set up an experiment class for current endpoint
@@ -267,8 +253,7 @@ class ActionManager:
                     "type": "response",
                     "message": {
                         "source": "System",
-                        "message": f"Experiment is reset with model {model}, backend {backend},"
-                        f" and reasoning effort {reasoning_effort}.",
+                        "message": f"Experiment is reset with model {model} and backend {backend}",
                     },
                 }
             )
