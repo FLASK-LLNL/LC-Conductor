@@ -244,7 +244,10 @@ class ActionManager:
                 base_url = os.getenv("FLASK_ORCHESTRATOR_URL", None)
 
         try:
-            logger.info(f"Experiment is reset with model {model} and backend {backend}")
+            logger.info(
+                f"Experiment is reset with model {model}, backend {backend}"
+                f", and reasoning effort {reasoning_effort}."
+            )
             AgentFactory.register_backend(
                 "agentframework",
                 AgentFrameworkBackend(
@@ -264,7 +267,8 @@ class ActionManager:
                     "type": "response",
                     "message": {
                         "source": "System",
-                        "message": f"Experiment is reset with model {model} and backend {backend}",
+                        "message": f"Experiment is reset with model {model}, backend {backend},"
+                        f" and reasoning effort {reasoning_effort}.",
                     },
                 }
             )
