@@ -60,7 +60,7 @@ logger.add(
 class CallbackLogger:
     def __init__(self, websocket: WebSocket, source: Optional[str] = None):
         self.websocket = websocket
-        self.logger = logger.bind(websocket=websocket)
+        self.logger = logger.bind()
         self.source = source
 
     def _apply_msg_source(self, **kwargs):
@@ -68,40 +68,42 @@ class CallbackLogger:
             kwargs["source"] = self.source
         return kwargs
 
-    async def info(self, message, **kwargs):
+    async def _send(self, level: str, message: str, **kwargs):
         kwargs = self._apply_msg_source(**kwargs)
-        if kwargs:
-            logger.bind(websocket=self.websocket, **kwargs).info(message)
+        log_kwargs = {k: v for k, v in kwargs.items() if k != "source"}
+        if log_kwargs:
+            logger.bind(**log_kwargs).log(level, message)
         else:
-            self.logger.info(message)
+            logger.log(level, message)
+
+        if self.websocket is None:
+            return
+
+        payload: dict[str, object] = {
+            "type": "response",
+            "message": {
+                "source": kwargs.get("source", f"Logger ({level.title()})"),
+                "message": message,
+            },
+        }
+        if "smiles" in kwargs:
+            payload["message"]["smiles"] = kwargs["smiles"]
+        await self.websocket.send_json(payload)
+
+    async def info(self, message, **kwargs):
+        await self._send("INFO", message, **kwargs)
 
     async def warning(self, message, **kwargs):
-        kwargs = self._apply_msg_source(**kwargs)
-        if kwargs:
-            logger.bind(websocket=self.websocket, **kwargs).warning(message)
-        else:
-            self.logger.warning(message)
+        await self._send("WARNING", message, **kwargs)
 
     async def debug(self, message, **kwargs):
-        kwargs = self._apply_msg_source(**kwargs)
-        if kwargs:
-            logger.bind(websocket=self.websocket, **kwargs).debug(message)
-        else:
-            self.logger.debug(message)
+        await self._send("DEBUG", message, **kwargs)
 
     async def error(self, message, **kwargs):
-        kwargs = self._apply_msg_source(**kwargs)
-        if kwargs:
-            logger.bind(websocket=self.websocket, **kwargs).error(message)
-        else:
-            self.logger.error(message)
+        await self._send("ERROR", message, **kwargs)
 
     async def exception(self, message, **kwargs):
-        kwargs = self._apply_msg_source(**kwargs)
-        if kwargs:
-            logger.bind(websocket=self.websocket, **kwargs).error(message)
-        else:
-            self.logger.exception(message)
+        await self._send("ERROR", message, **kwargs)
 
     def unbind(self):
         self.websocket = None

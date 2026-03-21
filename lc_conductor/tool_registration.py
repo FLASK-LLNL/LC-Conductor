@@ -44,6 +44,9 @@ class DeleteMCPServerRequest(BaseModel):
 class ToolList:
     server: str
     names: Optional[list[str]] = None
+    description: Optional[str] = None
+    kind: str = "mcp"
+    identifier: Optional[str] = None
 
     def json(self):
         return asdict(self)
