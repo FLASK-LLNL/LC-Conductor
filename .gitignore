@@ -195,3 +195,4 @@ cython_debug/
 
 *~
 node_modules/
+lcc_ui_components/package-lock.json
