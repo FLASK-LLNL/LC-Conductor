@@ -125,4 +125,7 @@ export interface SidebarProps extends SidebarState {
 export interface MarkdownTextProps {
   text: string;
   className?: string;
+  collapsibleCodeBlocks?: boolean;
+  defaultCollapsedCodeBlocks?: boolean;
+  codeBlockCollapseThreshold?: number;
 }
