@@ -5,10 +5,7 @@ from dataclasses import dataclass, asdict
 
 @dataclass
 class RunSettings:
-    prompt_debugging: bool
-
-    def __init__(self, promptDebugging: bool = False):
-        self.prompt_debugging = promptDebugging
+    prompt_debugging: bool = False
 
 
 async def loop_executor(executor, func, *args, **kwargs):
