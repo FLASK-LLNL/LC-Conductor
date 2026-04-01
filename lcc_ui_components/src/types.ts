@@ -46,7 +46,6 @@ export interface OrchestratorSettings {
   apiKey: string;
   backendLabel: string;
   toolServers?: ToolServer[];
-  localToolServers?: ToolServer[]; // Deprecated compatibility alias for local-scoped entries.
 }
 
 export interface BackendOption {

@@ -370,14 +370,6 @@ class ActionManager:
             for server in data.get("toolServers", [])
             if isinstance(server, dict) and server.get("url")
         ]
-        tool_server_payloads.extend(
-            {
-                **server,
-                "scope": "local",
-            }
-            for server in data.get("localToolServers", [])
-            if isinstance(server, dict) and server.get("url")
-        )
         self.task_manager.configured_tool_servers = [
             ToolServerConfig.from_json(server)
             for server in tool_server_payloads

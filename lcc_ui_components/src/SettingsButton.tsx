@@ -18,11 +18,7 @@ import type {
 import { BACKEND_OPTIONS } from './constants.js';
 import { checkLocalMcpServerConnectivity } from './localMcp.js';
 
-type LegacyOrchestratorSettings = Partial<OrchestratorSettings> & {
-  localToolServers?: ToolServer[];
-};
-
-const normalizeToolServers = (settings?: LegacyOrchestratorSettings): ToolServer[] => {
+const normalizeToolServers = (settings?: Partial<OrchestratorSettings>): ToolServer[] => {
   const nextServers: ToolServer[] = [];
   const seen = new Set<string>();
 
@@ -37,12 +33,11 @@ const normalizeToolServers = (settings?: LegacyOrchestratorSettings): ToolServer
   };
 
   (settings?.toolServers || []).forEach((server) => addServer(server, server.scope || 'backend'));
-  (settings?.localToolServers || []).forEach((server) => addServer(server, 'local'));
 
   return nextServers;
 };
 
-const normalizeSettings = (settings?: LegacyOrchestratorSettings): OrchestratorSettings => ({
+const normalizeSettings = (settings?: Partial<OrchestratorSettings>): OrchestratorSettings => ({
   backend: 'openai',
   backendLabel: 'OpenAI',
   useCustomUrl: false,
