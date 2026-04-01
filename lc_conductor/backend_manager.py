@@ -283,7 +283,12 @@ class ActionManager:
         tools: list[ToolDescriptor] = []
         server_list = self._configured_backend_tool_servers()
         for server in server_list:
-            tool_list = await list_server_tools([server])
+            try:
+                tool_list = await list_server_tools([server])
+            except Exception as exc:
+                logger.warning(f"Failed to enumerate backend MCP tools from {server}: {exc}")
+                continue
+
             tool_names = [name for name, _ in tool_list]
             tools.append(
                 ToolDescriptor(
@@ -291,6 +296,14 @@ class ActionManager:
                     identifier=server,
                     server=server,
                     names=tool_names,
+                    tools=[
+                        MCPToolDefinition(
+                            name=name,
+                            description=description,
+                        )
+                        for name, description in tool_list
+                    ]
+                    or None,
                     execution_scope="backend",
                 )
             )
@@ -379,7 +392,8 @@ class ActionManager:
 
         backend = data["backend"]
         model = data["model"]
-        base_url = data["customUrl"] if data["customUrl"] else None
+        use_custom_url = bool(data.get("useCustomUrl"))
+        base_url = data["customUrl"] if use_custom_url and data["customUrl"] else None
         api_key = data["apiKey"] if data["apiKey"] else None
         reasoning_effort = data.get("reasoningEffort") or "medium"
         self.reasoning_effort = reasoning_effort

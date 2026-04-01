@@ -8,18 +8,8 @@ import type {
   MCPToolDefinition,
 } from './types.js';
 
-type LocalMcpClient = {
-  listTools: () => Promise<{ tools?: Array<Record<string, unknown>> }>;
-  callTool: (args: {
-    name: string;
-    arguments?: Record<string, unknown>;
-  }) => Promise<Record<string, unknown>>;
-  close?: () => Promise<void> | void;
-};
-
-type LocalMcpTransport = {
-  close?: () => Promise<void> | void;
-};
+type LocalMcpClient = Client<any, any, any>;
+type LocalMcpTransport = StreamableHTTPClientTransport;
 
 type LocalMcpClientEntry = {
   client: LocalMcpClient;
@@ -46,7 +36,7 @@ const closeClientEntry = async (entry: LocalMcpClientEntry | undefined): Promise
 };
 
 const createClientEntry = async (serverUrl: string): Promise<LocalMcpClientEntry> => {
-  const client = new Client(
+  const client: LocalMcpClient = new Client(
     {
       name: 'lc-conductor-browser-mcp',
       version: '0.1.0',
@@ -54,10 +44,10 @@ const createClientEntry = async (serverUrl: string): Promise<LocalMcpClientEntry
     {
       capabilities: {},
     }
-  ) as LocalMcpClient;
+  );
 
-  const transport = new StreamableHTTPClientTransport(new URL(serverUrl)) as LocalMcpTransport;
-  await (client as { connect: (transport: LocalMcpTransport) => Promise<void> }).connect(transport);
+  const transport: LocalMcpTransport = new StreamableHTTPClientTransport(new URL(serverUrl));
+  await client.connect(transport);
   return { client, transport };
 };
 

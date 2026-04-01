@@ -1225,23 +1225,24 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                   </div>
 
                   {renderServerList(
+                    'local',
+                    'Client-Side MCP Servers',
+                    'These URLs are resolved from the browser machine and proxied to the backend over the websocket.',
+                    'No local MCP servers configured',
+                    'Add a server reachable from this browser session, such as 127.0.0.1 or a local SSH tunnel.',
+                    'Add Local MCP Server'
+                  )}
+
+                  {renderServerList(
                     'backend',
-                    'Backend-Accessible MCP Servers',
+                    'Server-Side MCP Servers',
                     'The backend process connects to these URLs directly. Use this for shared or remote MCP services.',
                     'No backend MCP servers configured',
                     'Add a server the backend can reach directly.',
                     'Add Backend MCP Server'
                   )}
 
-                  {renderServerList(
-                    'local',
-                    'Local MCP Servers',
-                    'These URLs are resolved from the browser machine and proxied to the backend over the websocket.',
-                    'No local MCP servers configured',
-                    'Add a server reachable from this browser session, such as 127.0.0.1 or a local SSH tunnel.',
-                    'Add Local MCP Server'
-                  )}
-                </div>
+		</div>
               )}
             </div>
 

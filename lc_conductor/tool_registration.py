@@ -12,7 +12,7 @@ from loguru import logger
 import requests
 from pydantic import BaseModel
 import json
-from typing import Optional, Tuple, List, Dict
+from typing import Any, Optional, Tuple, List, Dict
 import time
 import os
 import re

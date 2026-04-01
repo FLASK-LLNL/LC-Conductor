@@ -169,6 +169,16 @@ def build_local_mcp_direct_tools(
                     kwargs,
                 )
 
+            wrapped_tool = FunctionTool(
+                name=tool_definition.name,
+                description=tool_definition.description
+                or f"Proxy MCP tool `{tool_definition.name}`.",
+                func=_invoke_local_tool,
+                input_model=tool_definition.input_schema
+                or {"type": "object", "properties": {}},
+            )
+            setattr(wrapped_tool, "_charge_agentframework_wrapped", True)
+
             tools.append(
                 ToolDescriptor(
                     kind="mcp",
@@ -178,14 +188,7 @@ def build_local_mcp_direct_tools(
                     description=tool_definition.description
                     or f"Proxy MCP tool `{tool_definition.name}`.",
                     execution_scope="local",
-                    callable_tool=FunctionTool(
-                        name=tool_definition.name,
-                        description=tool_definition.description
-                        or f"Proxy MCP tool `{tool_definition.name}`.",
-                        func=_invoke_local_tool,
-                        input_model=tool_definition.input_schema
-                        or {"type": "object", "properties": {}},
-                    ),
+                    callable_tool=wrapped_tool,
                 )
             )
 

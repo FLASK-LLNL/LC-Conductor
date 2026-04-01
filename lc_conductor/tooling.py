@@ -134,6 +134,7 @@ class ToolDescriptor:
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> "ToolDescriptor":
+        raw_tools = payload.get("tools") or []
         return cls(
             kind=payload.get("kind", "mcp"),
             identifier=str(payload.get("identifier") or payload.get("server") or ""),
@@ -145,7 +146,7 @@ class ToolDescriptor:
             ),
             tools=[
                 MCPToolDefinition.from_json(tool)
-                for tool in payload.get("tools", [])
+                for tool in raw_tools
                 if isinstance(tool, dict) and tool.get("name")
             ]
             or None,
@@ -192,6 +193,11 @@ class ToolRuntime:
             callable_name = getattr(tool.callable_tool, "__name__", None)
             if isinstance(callable_name, str):
                 add_name(callable_name)
+                continue
+
+            declared_name = getattr(tool.callable_tool, "name", None)
+            if isinstance(declared_name, str):
+                add_name(declared_name)
 
         return resolved_names
 
