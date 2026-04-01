@@ -47,6 +47,8 @@ class ToolList:
     description: Optional[str] = None
     kind: str = "mcp"
     identifier: Optional[str] = None
+    executionScope: str = "backend"
+    tools: Optional[list[dict[str, Any]]] = None
 
     def json(self):
         return asdict(self)

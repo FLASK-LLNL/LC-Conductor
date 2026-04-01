@@ -50,6 +50,8 @@ class TaskManager:
         self.executor = ProcessPoolExecutor(max_workers=max_workers)
         self.available_tools: Optional[list[str]] = None
         self.available_builtin_tool_ids: Optional[list[str]] = None
+        self.local_tool_servers: list[str] = []
+        self.selected_local_mcp_tools: dict[str, list[Any]] = {}
 
     def _attach_done_callback(self, task: asyncio.Task) -> None:
         """Attach a done-callback to a background task so exceptions are observed.

@@ -19,6 +19,10 @@ export { BACKEND_OPTIONS } from './constants.js';
 export type {
   // Settings types
   ToolServer,
+  ToolServerScope,
+  ToolExecutionScope,
+  MCPToolDefinition,
+  MCPConnectivityResult,
   ReasoningEffort,
   OrchestratorSettings,
   BackendOption,

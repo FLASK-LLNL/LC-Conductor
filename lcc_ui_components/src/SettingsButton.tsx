@@ -7,7 +7,14 @@
 
 import React from 'react';
 import { Plus, Trash2, Edit2, Loader2, Settings, Wrench } from 'lucide-react';
-import { OrchestratorSettings, ReasoningEffort, ToolServer, SettingsButtonProps } from './types.js';
+import {
+  MCPConnectivityResult,
+  OrchestratorSettings,
+  ReasoningEffort,
+  ToolServer,
+  ToolServerScope,
+  SettingsButtonProps,
+} from './types.js';
 import { BACKEND_OPTIONS } from './constants.js';
 
 export const SettingsButton: React.FC<SettingsButtonProps> = ({
@@ -18,6 +25,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   initialSettings,
   username,
   httpServerUrl,
+  checkLocalMCPServerConnectivity,
   className = '',
 }) => {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -46,6 +54,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     useCustomModel: false,
     apiKey: '',
     toolServers: [],
+    localToolServers: [],
     ...initialSettings,
   };
 
@@ -53,16 +62,19 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   const [tempSettings, setTempSettings] = React.useState<OrchestratorSettings>(settings);
 
   // Tool Servers state
-  const [addingServer, setAddingServer] = React.useState(false);
+  const [addingServerScope, setAddingServerScope] = React.useState<ToolServerScope | null>(null);
   const [newServerUrl, setNewServerUrl] = React.useState('');
-  const [editingServer, setEditingServer] = React.useState<string | null>(null);
+  const [editingServer, setEditingServer] = React.useState<{
+    id: string;
+    scope: ToolServerScope;
+  } | null>(null);
   const [editServerUrl, setEditServerUrl] = React.useState('');
   const [connectivityStatus, setConnectivityStatus] = React.useState<
     Record<
       string,
       {
         status: 'checking' | 'connected' | 'disconnected';
-        tools?: Array<{ name: string; description?: string }>;
+        tools?: MCPConnectivityResult['tools'];
         error?: string;
       }
     >
@@ -73,6 +85,31 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   // Store active connections for cleanup
   const activeConnectionsRef = React.useRef<Map<string, AbortController>>(new Map());
   const tooltipRef = React.useRef<HTMLDivElement>(null);
+
+  const serverKey = React.useCallback((scope: ToolServerScope, url: string) => `${scope}:${url}`, []);
+
+  const getServersForScope = React.useCallback(
+    (scope: ToolServerScope, currentSettings: OrchestratorSettings = tempSettings) =>
+      scope === 'backend'
+        ? currentSettings.toolServers || []
+        : currentSettings.localToolServers || [],
+    [tempSettings]
+  );
+
+  const updateServersForScope = React.useCallback(
+    (scope: ToolServerScope, nextServers: ToolServer[]) => {
+      setTempSettings((prev) => ({
+        ...prev,
+        [scope === 'backend' ? 'toolServers' : 'localToolServers']: nextServers,
+      }));
+    },
+    []
+  );
+
+  const definedTools = React.useCallback(
+    (tools: MCPConnectivityResult['tools']) => (tools && tools.length > 0 ? tools : undefined),
+    []
+  );
 
   // Update settings when initialSettings prop changes
   React.useEffect(() => {
@@ -100,9 +137,12 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
 
   // Check connectivity for all tool servers when modal opens
   React.useEffect(() => {
-    if (isModalOpen && tempSettings.toolServers && tempSettings.toolServers.length > 0) {
-      tempSettings.toolServers.forEach((server) => {
-        checkMCPServerConnectivity(server.url);
+    if (isModalOpen) {
+      (tempSettings.toolServers || []).forEach((server) => {
+        checkMCPServerConnectivity('backend', server.url);
+      });
+      (tempSettings.localToolServers || []).forEach((server) => {
+        checkMCPServerConnectivity('local', server.url);
       });
     }
 
@@ -131,61 +171,70 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     }
   }, [pinnedServer]);
 
-  const checkMCPServerConnectivity = async (url: string) => {
+  const checkMCPServerConnectivity = async (scope: ToolServerScope, url: string) => {
+    const key = serverKey(scope, url);
     // Cancel any existing connection for this URL
-    const existingController = activeConnectionsRef.current.get(url);
+    const existingController = activeConnectionsRef.current.get(key);
     if (existingController) {
       existingController.abort();
     }
 
     // Create new abort controller
     const abortController = new AbortController();
-    activeConnectionsRef.current.set(url, abortController);
+    activeConnectionsRef.current.set(key, abortController);
 
     setConnectivityStatus((prev) => ({
       ...prev,
-      [url]: { status: 'checking' },
+      [key]: { status: 'checking' },
     }));
 
     try {
-      // Call backend to validate the MCP server
-      const response = await fetch(httpServerUrl + '/check-mcp-servers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          urls: [url],
-        }),
-        signal: abortController.signal,
-      });
+      let result: MCPConnectivityResult;
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      if (scope === 'local') {
+        if (!checkLocalMCPServerConnectivity) {
+          throw new Error('Local MCP checks are not available in this app');
+        }
+        result = await checkLocalMCPServerConnectivity(url);
+      } else {
+        const response = await fetch(httpServerUrl + '/check-mcp-servers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            urls: [url],
+          }),
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        result = data.results[url];
       }
-
-      const data = await response.json();
-      const result = data.results[url];
 
       if (result.status === 'connected') {
         setConnectivityStatus((prev) => ({
           ...prev,
-          [url]: {
+          [key]: {
             status: 'connected',
-            tools: result.tools?.length > 0 ? result.tools : undefined,
+            tools: definedTools(result.tools),
           },
         }));
       } else {
         setConnectivityStatus((prev) => ({
           ...prev,
-          [url]: {
+          [key]: {
             status: 'disconnected',
             error: result.error || 'Connection failed',
           },
         }));
       }
 
-      activeConnectionsRef.current.delete(url);
+      activeConnectionsRef.current.delete(key);
     } catch (error: any) {
       if (error.name === 'AbortError') {
         // Request was cancelled, don't update status
@@ -194,12 +243,12 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
 
       setConnectivityStatus((prev) => ({
         ...prev,
-        [url]: {
+        [key]: {
           status: 'disconnected',
           error: error.message || 'Connection failed',
         },
       }));
-      activeConnectionsRef.current.delete(url);
+      activeConnectionsRef.current.delete(key);
     }
   };
 
@@ -213,6 +262,8 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   const handleSave = () => {
     setSettings(tempSettings);
     setIsModalOpen(false);
+    setAddingServerScope(null);
+    setEditingServer(null);
     setPinnedServer(null);
     console.log('Settings saved:', tempSettings);
 
@@ -225,7 +276,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   const handleCancel = () => {
     setTempSettings(settings);
     setIsModalOpen(false);
-    setAddingServer(false);
+    setAddingServerScope(null);
     setEditingServer(null);
     setPinnedServer(null);
     setActiveTab('orchestrator');
@@ -388,287 +439,527 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   };
 
   // Tool Server handlers
-  const handleAddServer = async () => {
+  const validateServer = async (
+    scope: ToolServerScope,
+    url: string,
+    name?: string
+  ): Promise<MCPConnectivityResult> => {
+    if (scope === 'local') {
+      if (!checkLocalMCPServerConnectivity) {
+        return {
+          status: 'disconnected',
+          error: 'Local MCP checks are not available in this app',
+        };
+      }
+      return checkLocalMCPServerConnectivity(url);
+    }
+
+    const response = await fetch(httpServerUrl + '/validate-mcp-server', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url,
+        name,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    return response.json();
+  };
+
+  const handleAddServer = async (scope: ToolServerScope) => {
     if (!newServerUrl.trim()) return;
 
     const url = newServerUrl.trim();
+    const key = serverKey(scope, url);
 
-    // Set to checking state
     setConnectivityStatus((prev) => ({
       ...prev,
-      [url]: { status: 'checking' },
+      [key]: { status: 'checking' },
     }));
 
     try {
-      // Call backend to validate and register
-      const response = await fetch(httpServerUrl + '/validate-mcp-server', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: url,
-          name: `Server ${Date.now()}`,
-        }),
-      });
+      const result = await validateServer(scope, url, `Server ${Date.now()}`);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.status === 'connected') {
-        // Server validated and registered successfully
-        const newServer: ToolServer = {
-          id: Date.now().toString(),
-          url: result.url || url,
-        };
-
-        setTempSettings({
-          ...tempSettings,
-          toolServers: [...(tempSettings.toolServers || []), newServer],
-        });
-
-        // Update connectivity status with tools
+      if (result.status !== 'connected') {
         setConnectivityStatus((prev) => ({
           ...prev,
-          [newServer.url]: {
-            status: 'connected',
-            tools: result.tools?.length > 0 ? result.tools : undefined,
-          },
-        }));
-
-        setNewServerUrl('');
-        setAddingServer(false);
-
-        // Notify parent that server was added
-        if (onServerAdded) {
-          onServerAdded();
-        }
-      } else {
-        // Validation failed
-        setConnectivityStatus((prev) => ({
-          ...prev,
-          [url]: {
+          [key]: {
             status: 'disconnected',
             error: result.error || 'Validation failed',
           },
         }));
-
-        // Show error to user but keep the input visible
         alert(`Failed to add server: ${result.error || 'Validation failed'}`);
+        return;
+      }
+
+      const normalizedUrl = result.url || url;
+      const newServer: ToolServer = {
+        id: Date.now().toString(),
+        url: normalizedUrl,
+        scope,
+      };
+
+      updateServersForScope(scope, [...getServersForScope(scope), newServer]);
+      setConnectivityStatus((prev) => ({
+        ...prev,
+        [serverKey(scope, normalizedUrl)]: {
+          status: 'connected',
+          tools: definedTools(result.tools),
+        },
+      }));
+
+      if (normalizedUrl !== url) {
+        setConnectivityStatus((prev) => {
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      }
+
+      setNewServerUrl('');
+      setAddingServerScope(null);
+
+      if (scope === 'backend' && onServerAdded) {
+        onServerAdded();
       }
     } catch (error: any) {
       setConnectivityStatus((prev) => ({
         ...prev,
-        [url]: {
+        [key]: {
           status: 'disconnected',
           error: error.message || 'Connection failed',
         },
       }));
-
       alert(`Failed to add server: ${error.message || 'Connection failed'}`);
     }
   };
 
-  const handleEditServer = (serverId: string) => {
-    const server = tempSettings.toolServers?.find((s) => s.id === serverId);
-    if (server) {
-      setEditingServer(serverId);
-      setEditServerUrl(server.url);
-    }
+  const handleEditServer = (scope: ToolServerScope, serverId: string) => {
+    const server = getServersForScope(scope).find((s) => s.id === serverId);
+    if (!server) return;
+
+    setEditingServer({ id: serverId, scope });
+    setEditServerUrl(server.url);
   };
 
-  const handleSaveServerEdit = async (serverId: string) => {
+  const handleSaveServerEdit = async (scope: ToolServerScope, serverId: string) => {
     if (!editServerUrl.trim()) return;
 
-    const oldServer = tempSettings.toolServers?.find((s) => s.id === serverId);
+    const oldServer = getServersForScope(scope).find((s) => s.id === serverId);
     if (!oldServer) return;
 
     const newUrl = editServerUrl.trim();
+    const key = serverKey(scope, newUrl);
 
-    // Set to checking state
     setConnectivityStatus((prev) => ({
       ...prev,
-      [newUrl]: { status: 'checking' },
+      [key]: { status: 'checking' },
     }));
 
     try {
-      // Call backend to validate and register
-      const response = await fetch(httpServerUrl + '/validate-mcp-server', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: newUrl,
-          name: oldServer.name || `Server ${serverId}`,
-        }),
-      });
+      const result = await validateServer(scope, newUrl, oldServer.name || `Server ${serverId}`);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.status === 'connected') {
-        // Clean up old URL status
-        if (oldServer.url !== newUrl) {
-          setConnectivityStatus((prev) => {
-            const newStatus = { ...prev };
-            delete newStatus[oldServer.url];
-            return newStatus;
-          });
-        }
-
-        // Update server URL
-        setTempSettings({
-          ...tempSettings,
-          toolServers:
-            tempSettings.toolServers?.map((s) =>
-              s.id === serverId ? { ...s, url: result.url || newUrl } : s
-            ) || [],
-        });
-
-        // Update connectivity status
+      if (result.status !== 'connected') {
         setConnectivityStatus((prev) => ({
           ...prev,
-          [result.url || newUrl]: {
-            status: 'connected',
-            tools: result.tools?.length > 0 ? result.tools : undefined,
-          },
-        }));
-
-        setEditingServer(null);
-        setEditServerUrl('');
-      } else {
-        // Validation failed
-        setConnectivityStatus((prev) => ({
-          ...prev,
-          [newUrl]: {
+          [key]: {
             status: 'disconnected',
             error: result.error || 'Validation failed',
           },
         }));
-
         alert(`Failed to update server: ${result.error || 'Validation failed'}`);
+        return;
       }
+
+      const normalizedUrl = result.url || newUrl;
+      if (oldServer.url !== normalizedUrl) {
+        setConnectivityStatus((prev) => {
+          const next = { ...prev };
+          delete next[serverKey(scope, oldServer.url)];
+          return next;
+        });
+      }
+
+      updateServersForScope(
+        scope,
+        getServersForScope(scope).map((server) =>
+          server.id === serverId ? { ...server, url: normalizedUrl, scope } : server
+        )
+      );
+
+      setConnectivityStatus((prev) => ({
+        ...prev,
+        [serverKey(scope, normalizedUrl)]: {
+          status: 'connected',
+          tools: definedTools(result.tools),
+        },
+      }));
+      setEditingServer(null);
+      setEditServerUrl('');
     } catch (error: any) {
       setConnectivityStatus((prev) => ({
         ...prev,
-        [newUrl]: {
+        [key]: {
           status: 'disconnected',
           error: error.message || 'Connection failed',
         },
       }));
-
       alert(`Failed to update server: ${error.message || 'Connection failed'}`);
     }
   };
 
-  const handleDeleteServer = async (serverId: string) => {
-    const server = tempSettings.toolServers?.find((s) => s.id === serverId);
+  const handleDeleteServer = async (scope: ToolServerScope, serverId: string) => {
+    const server = getServersForScope(scope).find((s) => s.id === serverId);
     if (!server) return;
 
-    console.log('🗑️ Deleting server:', server.url);
-
-    try {
-      const response = await fetch(httpServerUrl + '/delete-mcp-server', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: server.url }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-      console.log('🗑️ Backend response:', result);
-
-      if (result.status === 'deleted' || result.status === 'not_found') {
-        // Cancel any active connection
-        const controller = activeConnectionsRef.current.get(server.url);
-        if (controller) {
-          controller.abort();
-          activeConnectionsRef.current.delete(server.url);
-        }
-
-        // Clean up status
-        setConnectivityStatus((prev) => {
-          const newStatus = { ...prev };
-          delete newStatus[server.url];
-          return newStatus;
-        });
-
-        if (pinnedServer === serverId) {
-          setPinnedServer(null);
-        }
-
-        // Remove from tempSettings
-        setTempSettings({
-          ...tempSettings,
-          toolServers: tempSettings.toolServers?.filter((s) => s.id !== serverId) || [],
-        });
-
-        // Notify parent
-        if (onServerRemoved) {
-          onServerRemoved();
-        }
-
-        console.log('✅ Server deleted successfully');
-      } else {
-        alert(`Failed to delete server: ${result.message}`);
-      }
-    } catch (error: any) {
-      alert(`Failed to delete server: ${error.message || 'Connection failed'}`);
-    }
-  };
-
-  const handleClearAllServers = async () => {
-    if (!tempSettings.toolServers || tempSettings.toolServers.length === 0) {
-      return;
-    }
-
-    if (!confirm(`Remove all ${tempSettings.toolServers.length} tool servers?`)) {
-      return;
-    }
-
-    // Delete each server from backend
-    const deletePromises = tempSettings.toolServers.map(async (server) => {
+    if (scope === 'backend') {
       try {
-        await fetch(httpServerUrl + '/delete-mcp-server', {
+        const response = await fetch(httpServerUrl + '/delete-mcp-server', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url: server.url }),
         });
-      } catch (error) {
-        console.warn(`Error deleting ${server.url}:`, error);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+        if (result.status !== 'deleted' && result.status !== 'not_found') {
+          alert(`Failed to delete server: ${result.message}`);
+          return;
+        }
+
+        if (onServerRemoved) {
+          onServerRemoved();
+        }
+      } catch (error: any) {
+        alert(`Failed to delete server: ${error.message || 'Connection failed'}`);
+        return;
+      }
+    }
+
+    const controller = activeConnectionsRef.current.get(serverKey(scope, server.url));
+    if (controller) {
+      controller.abort();
+      activeConnectionsRef.current.delete(serverKey(scope, server.url));
+    }
+
+    setConnectivityStatus((prev) => {
+      const next = { ...prev };
+      delete next[serverKey(scope, server.url)];
+      return next;
+    });
+
+    if (pinnedServer === `${scope}:${serverId}`) {
+      setPinnedServer(null);
+    }
+
+    updateServersForScope(
+      scope,
+      getServersForScope(scope).filter((candidate) => candidate.id !== serverId)
+    );
+  };
+
+  const handleClearAllServers = async (scope: ToolServerScope) => {
+    const servers = getServersForScope(scope);
+    if (servers.length === 0) {
+      return;
+    }
+
+    if (!confirm(`Remove all ${servers.length} ${scope} MCP servers?`)) {
+      return;
+    }
+
+    if (scope === 'backend') {
+      await Promise.all(
+        servers.map(async (server) => {
+          try {
+            await fetch(httpServerUrl + '/delete-mcp-server', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: server.url }),
+            });
+          } catch (error) {
+            console.warn(`Error deleting ${server.url}:`, error);
+          }
+        })
+      );
+
+      if (onServerRemoved) {
+        onServerRemoved();
+      }
+    }
+
+    servers.forEach((server) => {
+      const key = serverKey(scope, server.url);
+      const controller = activeConnectionsRef.current.get(key);
+      if (controller) {
+        controller.abort();
+        activeConnectionsRef.current.delete(key);
       }
     });
 
-    await Promise.all(deletePromises);
-
-    // Cancel all active connections
-    activeConnectionsRef.current.forEach((controller) => controller.abort());
-    activeConnectionsRef.current.clear();
-
-    // Clear frontend state
-    setTempSettings({
-      ...tempSettings,
-      toolServers: [],
+    setConnectivityStatus((prev) => {
+      const next = { ...prev };
+      servers.forEach((server) => {
+        delete next[serverKey(scope, server.url)];
+      });
+      return next;
     });
-    setConnectivityStatus({});
+    updateServersForScope(scope, []);
     setPinnedServer(null);
-
-    if (onServerRemoved) {
-      onServerRemoved();
-    }
   };
 
   const currentBackendOption = BACKEND_OPTIONS.find((opt) => opt.value === tempSettings.backend);
+  const totalToolServerCount =
+    (tempSettings.toolServers?.length || 0) + (tempSettings.localToolServers?.length || 0);
+
+  const renderServerList = (
+    scope: ToolServerScope,
+    title: string,
+    helperText: string,
+    emptyText: string,
+    emptySubtext: string,
+    addButtonText: string
+  ) => {
+    const servers = getServersForScope(scope);
+    const isAddingHere = addingServerScope === scope;
+    const sectionColor = scope === 'backend' ? '#a78bfa' : '#22c55e';
+    const sectionBadgeText = scope === 'backend' ? 'Backend connects directly' : 'Browser proxies calls';
+
+    return (
+      <div className="space-y-3">
+        <div className="flex-between">
+          <div>
+            <h4 className="heading-3">
+              {title}
+              <span className="helper-text" style={{ marginLeft: '0.5rem' }}>
+                ({sectionBadgeText})
+              </span>
+            </h4>
+            <p className="helper-text">{helperText}</p>
+          </div>
+          {servers.length > 0 && (
+            <button
+              onClick={() => handleClearAllServers(scope)}
+              className="btn btn-tertiary btn-sm"
+            >
+              <Trash2 className="w-3 h-3" />
+              Clear All
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          {servers.map((server) => {
+            const scopedId = `${scope}:${server.id}`;
+            const statusKey = serverKey(scope, server.url);
+            const serverStatus = connectivityStatus[statusKey];
+            const isEditing = editingServer?.id === server.id && editingServer.scope === scope;
+
+            return (
+              <div
+                key={scopedId}
+                className="glass-panel hover:bg-surface-hover transition-colors"
+              >
+                {isEditing ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={editServerUrl}
+                      onChange={(e) => setEditServerUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveServerEdit(scope, server.id);
+                        if (e.key === 'Escape') {
+                          setEditingServer(null);
+                          setEditServerUrl('');
+                        }
+                      }}
+                      placeholder="https://example.com/mcp"
+                      className="form-input"
+                      autoFocus
+                    />
+                    <div className="flex gap-sm">
+                      <button
+                        onClick={() => handleSaveServerEdit(scope, server.id)}
+                        className="btn btn-secondary btn-sm flex-1"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingServer(null);
+                          setEditServerUrl('');
+                        }}
+                        className="btn btn-tertiary btn-sm flex-1"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-md">
+                    <div
+                      className="relative connectivity-indicator"
+                      onMouseEnter={() => setHoveredServer(scopedId)}
+                      onMouseLeave={() => setHoveredServer(null)}
+                      onClick={() => setPinnedServer(pinnedServer === scopedId ? null : scopedId)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {serverStatus?.status === 'checking' ? (
+                        <Loader2 className="icon-md text-muted animate-spin" />
+                      ) : (
+                        <div
+                          className={`status-indicator ${
+                            serverStatus?.status === 'connected'
+                              ? 'status-indicator-connected'
+                              : 'status-indicator-disconnected'
+                          }`}
+                          title={
+                            serverStatus?.status === 'connected'
+                              ? 'Connected (click for tools)'
+                              : serverStatus?.error || 'Disconnected'
+                          }
+                        />
+                      )}
+
+                      {(hoveredServer === scopedId || pinnedServer === scopedId) &&
+                        serverStatus?.status === 'connected' &&
+                        serverStatus.tools &&
+                        serverStatus.tools.length > 0 && (
+                          <div
+                            ref={tooltipRef}
+                            className="ws-tooltip"
+                            style={{ left: 'auto', right: 0, top: '2.5rem' }}
+                          >
+                            <p className="text-sm font-semibold mb-2 text-primary">
+                              Available Tools:
+                            </p>
+                            <ul className="text-sm space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                              {serverStatus.tools.map((tool, idx) => (
+                                <li key={idx} className="text-secondary">
+                                  <span className="text-mono emphasized-text">• {tool.name}</span>
+                                  {tool.description && (
+                                    <p
+                                      className="text-xs text-secondary"
+                                      style={{ marginLeft: '0.75rem', marginTop: '0.125rem' }}
+                                    >
+                                      {tool.description.length > 80
+                                        ? `${tool.description.substring(0, 80)}...`
+                                        : tool.description}
+                                    </p>
+                                  )}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                    </div>
+
+                    <div className="flex-1">
+                      <p className="text-sm truncate text-primary">{server.url}</p>
+                    </div>
+
+                    <div className="flex items-center gap-sm">
+                      <button
+                        onClick={() => handleEditServer(scope, server.id)}
+                        className="btn-icon"
+                        title="Edit server"
+                      >
+                        <Edit2 className="icon-md" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteServer(scope, server.id)}
+                        className="action-button action-button-danger"
+                        title="Delete server"
+                      >
+                        <Trash2 className="icon-md" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {servers.length === 0 && !isAddingHere && (
+            <div
+              className="empty-state"
+              style={{
+                padding: '2rem',
+                border: `1px dashed ${sectionColor}`,
+                borderRadius: '0.5rem',
+              }}
+            >
+              <Wrench className="empty-state-icon" />
+              <p className="empty-state-text">{emptyText}</p>
+              <p className="empty-state-subtext">{emptySubtext}</p>
+            </div>
+          )}
+        </div>
+
+        {isAddingHere ? (
+          <div className="glass-panel space-y-2" style={{ border: `2px solid ${sectionColor}` }}>
+            <label className="form-label-block">MCP Server URL</label>
+            <input
+              type="text"
+              value={newServerUrl}
+              onChange={(e) => setNewServerUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleAddServer(scope);
+                if (e.key === 'Escape') {
+                  setAddingServerScope(null);
+                  setNewServerUrl('');
+                }
+              }}
+              placeholder="http://127.0.0.1:3001/mcp"
+              className="form-input"
+              autoFocus
+            />
+            {scope === 'local' && (
+              <p className="helper-text">
+                The browser will talk to this server and proxy tool calls over the websocket. The
+                MCP endpoint must be reachable from this browser and allow cross-origin requests.
+              </p>
+            )}
+            <div className="flex gap-sm">
+              <button onClick={() => handleAddServer(scope)} className="btn btn-secondary btn-sm flex-1">
+                <Plus className="w-3 h-3" />
+                Add Server
+              </button>
+              <button
+                onClick={() => {
+                  setAddingServerScope(null);
+                  setNewServerUrl('');
+                }}
+                className="btn btn-tertiary btn-sm flex-1"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              setAddingServerScope(scope);
+              setNewServerUrl('');
+            }}
+            className="btn btn-secondary btn-sm w-full"
+          >
+            <Plus className="icon-md" />
+            <span>{addButtonText}</span>
+          </button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -724,8 +1015,8 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                 >
                   <Wrench className="w-4 h-4" />
                   <span>Tool Servers</span>
-                  {tempSettings.toolServers && tempSettings.toolServers.length > 0 && (
-                    <span className="notification-badge">{tempSettings.toolServers.length}</span>
+                  {totalToolServerCount > 0 && (
+                    <span className="notification-badge">{totalToolServerCount}</span>
                   )}
                 </button>
               </div>
@@ -902,224 +1193,43 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
               {/* Tool Servers Tab */}
               {activeTab === 'tools' && (
                 <div className="space-y-4">
-                  <div className="flex-between">
-                    <div>
-                      <h3 className="heading-3">Custom Tool Servers (MCP)</h3>
-                      <p className="helper-text">
-                        Configure external MCP tool servers for extended functionality
-                      </p>
-                    </div>
-                    {tempSettings.toolServers && tempSettings.toolServers.length > 0 && (
-                      <button onClick={handleClearAllServers} className="btn btn-tertiary btn-sm">
-                        <Trash2 className="w-3 h-3" />
-                        Clear All
-                      </button>
-                    )}
+                  <div>
+                    <h3 className="heading-3">Custom Tool Servers (MCP)</h3>
+                    <p className="helper-text">
+                      Backend MCP servers are reached directly by the Flask backend. Local MCP
+                      servers are reached by this browser session and proxied to the orchestrator
+                      over the websocket.
+                    </p>
                   </div>
 
-                  {/* Server List */}
-                  <div className="space-y-2">
-                    {tempSettings.toolServers?.map((server) => (
-                      <div
-                        key={server.id}
-                        className="glass-panel hover:bg-surface-hover transition-colors"
-                      >
-                        {editingServer === server.id ? (
-                          <div className="space-y-2">
-                            <input
-                              type="text"
-                              value={editServerUrl}
-                              onChange={(e) => setEditServerUrl(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSaveServerEdit(server.id);
-                                if (e.key === 'Escape') {
-                                  setEditingServer(null);
-                                  setEditServerUrl('');
-                                }
-                              }}
-                              placeholder="https://example.com/sse"
-                              className="form-input"
-                              autoFocus
-                            />
-                            <div className="flex gap-sm">
-                              <button
-                                onClick={() => handleSaveServerEdit(server.id)}
-                                className="btn btn-secondary btn-sm flex-1"
-                              >
-                                Save
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingServer(null);
-                                  setEditServerUrl('');
-                                }}
-                                className="btn btn-tertiary btn-sm flex-1"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-md">
-                            {/* Connectivity Indicator */}
-                            <div
-                              className="relative connectivity-indicator"
-                              onMouseEnter={() => setHoveredServer(server.id)}
-                              onMouseLeave={() => setHoveredServer(null)}
-                              onClick={() =>
-                                setPinnedServer(pinnedServer === server.id ? null : server.id)
-                              }
-                              style={{ cursor: 'pointer' }}
-                            >
-                              {connectivityStatus[server.url]?.status === 'checking' ? (
-                                <Loader2 className="icon-md text-muted animate-spin" />
-                              ) : (
-                                <div
-                                  className={`status-indicator ${
-                                    connectivityStatus[server.url]?.status === 'connected'
-                                      ? 'status-indicator-connected'
-                                      : 'status-indicator-disconnected'
-                                  }`}
-                                  title={
-                                    connectivityStatus[server.url]?.status === 'connected'
-                                      ? 'Connected (click for tools)'
-                                      : connectivityStatus[server.url]?.error || 'Disconnected'
-                                  }
-                                />
-                              )}
-
-                              {/* Tools Tooltip */}
-                              {(hoveredServer === server.id || pinnedServer === server.id) &&
-                                connectivityStatus[server.url]?.status === 'connected' &&
-                                connectivityStatus[server.url]?.tools &&
-                                connectivityStatus[server.url].tools!.length > 0 && (
-                                  <div
-                                    ref={tooltipRef}
-                                    className="ws-tooltip"
-                                    style={{ left: 'auto', right: 0, top: '2.5rem' }}
-                                  >
-                                    <p className="text-sm font-semibold mb-2 text-primary">
-                                      Available Tools:
-                                    </p>
-                                    <ul className="text-sm space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                                      {connectivityStatus[server.url].tools!.map((tool, idx) => (
-                                        <li key={idx} className="text-secondary">
-                                          <span className="text-mono emphasized-text">
-                                            • {tool.name}
-                                          </span>
-                                          {tool.description && (
-                                            <p
-                                              className="text-xs text-secondary"
-                                              style={{
-                                                marginLeft: '0.75rem',
-                                                marginTop: '0.125rem',
-                                              }}
-                                            >
-                                              {tool.description.length > 80
-                                                ? `${tool.description.substring(0, 80)}...`
-                                                : tool.description}
-                                            </p>
-                                          )}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                            </div>
-
-                            {/* URL */}
-                            <div className="flex-1">
-                              <p className="text-sm truncate text-primary">{server.url}</p>
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div className="flex items-center gap-sm">
-                              <button
-                                onClick={() => handleEditServer(server.id)}
-                                className="btn-icon"
-                                title="Edit server"
-                              >
-                                <Edit2 className="icon-md" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteServer(server.id)}
-                                className="action-button action-button-danger"
-                                title="Delete server"
-                              >
-                                <Trash2 className="icon-md" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
-                    {/* Empty State */}
-                    {(!tempSettings.toolServers || tempSettings.toolServers.length === 0) &&
-                      !addingServer && (
-                        <div
-                          className="empty-state"
-                          style={{
-                            padding: '2rem',
-                            border: '1px dashed rgba(168, 85, 247, 0.5)',
-                            borderRadius: '0.5rem',
-                          }}
-                        >
-                          <Wrench className="empty-state-icon" />
-                          <p className="empty-state-text">No tool servers configured</p>
-                          <p className="empty-state-subtext">
-                            Add MCP servers to extend functionality
-                          </p>
-                        </div>
-                      )}
+                  <div
+                    className="glass-panel"
+                    style={{ border: '1px solid rgba(168, 85, 247, 0.25)' }}
+                  >
+                    <p className="text-sm text-secondary">
+                      Use <code>127.0.0.1</code>, SSH forwards, or machine-local hostnames in the
+                      local section when the backend server cannot reach them. Those local MCP
+                      endpoints must still be reachable from your browser and usually need CORS
+                      enabled.
+                    </p>
                   </div>
 
-                  {/* Add New Server */}
-                  {addingServer ? (
-                    <div className="glass-panel space-y-2" style={{ border: '2px solid #a78bfa' }}>
-                      <label className="form-label-block">MCP Server URL</label>
-                      <input
-                        type="text"
-                        value={newServerUrl}
-                        onChange={(e) => setNewServerUrl(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleAddServer();
-                          if (e.key === 'Escape') {
-                            setAddingServer(false);
-                            setNewServerUrl('');
-                          }
-                        }}
-                        placeholder="https://example.com/sse"
-                        className="form-input"
-                        autoFocus
-                      />
-                      <div className="flex gap-sm">
-                        <button
-                          onClick={handleAddServer}
-                          className="btn btn-secondary btn-sm flex-1"
-                        >
-                          <Plus className="w-3 h-3" />
-                          Add Server
-                        </button>
-                        <button
-                          onClick={() => {
-                            setAddingServer(false);
-                            setNewServerUrl('');
-                          }}
-                          className="btn btn-tertiary btn-sm flex-1"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setAddingServer(true)}
-                      className="btn btn-secondary btn-sm w-full"
-                    >
-                      <Plus className="icon-md" />
-                      <span>Add Tool Server</span>
-                    </button>
+                  {renderServerList(
+                    'backend',
+                    'Backend-Accessible MCP Servers',
+                    'The backend process connects to these URLs directly. Use this for shared or remote MCP services.',
+                    'No backend MCP servers configured',
+                    'Add a server the backend can reach directly.',
+                    'Add Backend MCP Server'
+                  )}
+
+                  {renderServerList(
+                    'local',
+                    'Local MCP Servers',
+                    'These URLs are resolved from the browser machine and proxied to the backend over the websocket.',
+                    'No local MCP servers configured',
+                    'Add a server reachable from this browser session, such as 127.0.0.1 or a local SSH tunnel.',
+                    'Add Local MCP Server'
                   )}
                 </div>
               )}
