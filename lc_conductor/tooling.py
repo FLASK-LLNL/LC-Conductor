@@ -168,6 +168,40 @@ class ToolRuntime:
     tools: list[ToolDescriptor] = field(default_factory=list)
 
     @property
+    def tool_names(self) -> list[str]:
+        resolved_names: list[str] = []
+        seen_names: set[str] = set()
+
+        def add_name(name: str | None) -> None:
+            if not name or name in seen_names:
+                return
+            seen_names.add(name)
+            resolved_names.append(name)
+
+        for tool in self.tools:
+            if tool.names:
+                for name in tool.names:
+                    add_name(name)
+                continue
+
+            if tool.tools:
+                for mcp_tool in tool.tools:
+                    add_name(mcp_tool.name)
+                continue
+
+            callable_name = getattr(tool.callable_tool, "__name__", None)
+            if isinstance(callable_name, str):
+                add_name(callable_name)
+
+        return resolved_names
+
+    def tool_summary(self) -> str:
+        tool_names = self.tool_names
+        if tool_names:
+            return ", ".join(tool_names)
+        return "none"
+
+    @property
     def mcp_server_urls(self) -> list[str]:
         server_urls: list[str] = []
         for tool in self.tools:
