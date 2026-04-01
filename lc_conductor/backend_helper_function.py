@@ -1,11 +1,11 @@
 import asyncio
-from typing import Any, Dict, Optional, Literal, Tuple
-from dataclasses import dataclass, asdict
+from pydantic.dataclasses import dataclass
+from pydantic import Field
 
 
 @dataclass
 class RunSettings:
-    promptDebugging: bool = False
+    prompt_debugging: bool = Field(alias="promptDebugging", default=False)
 
 
 async def loop_executor(executor, func, *args, **kwargs):
