@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { Plus, Trash2, Edit2, Loader2, Settings, Wrench } from 'lucide-react';
-import {
+import type {
   MCPConnectivityResult,
   OrchestratorSettings,
   ReasoningEffort,
@@ -16,6 +16,44 @@ import {
   SettingsButtonProps,
 } from './types.js';
 import { BACKEND_OPTIONS } from './constants.js';
+import { checkLocalMcpServerConnectivity } from './localMcp.js';
+
+type LegacyOrchestratorSettings = Partial<OrchestratorSettings> & {
+  localToolServers?: ToolServer[];
+};
+
+const normalizeToolServers = (settings?: LegacyOrchestratorSettings): ToolServer[] => {
+  const nextServers: ToolServer[] = [];
+  const seen = new Set<string>();
+
+  const addServer = (server: ToolServer, fallbackScope: ToolServerScope) => {
+    const scope = server.scope === 'local' ? 'local' : fallbackScope;
+    const key = `${scope}:${server.url}`;
+    if (!server.url || seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    nextServers.push({ ...server, scope });
+  };
+
+  (settings?.toolServers || []).forEach((server) => addServer(server, server.scope || 'backend'));
+  (settings?.localToolServers || []).forEach((server) => addServer(server, 'local'));
+
+  return nextServers;
+};
+
+const normalizeSettings = (settings?: LegacyOrchestratorSettings): OrchestratorSettings => ({
+  backend: 'openai',
+  backendLabel: 'OpenAI',
+  useCustomUrl: false,
+  customUrl: '',
+  model: 'gpt-5.4',
+  reasoningEffort: 'medium',
+  useCustomModel: false,
+  apiKey: '',
+  ...settings,
+  toolServers: normalizeToolServers(settings),
+});
 
 export const SettingsButton: React.FC<SettingsButtonProps> = ({
   onClick,
@@ -25,7 +63,6 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   initialSettings,
   username,
   httpServerUrl,
-  checkLocalMCPServerConnectivity,
   className = '',
 }) => {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -44,19 +81,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   >({});
 
   // Default settings
-  const defaultSettings: OrchestratorSettings = {
-    backend: 'openai',
-    backendLabel: 'OpenAI',
-    useCustomUrl: false,
-    customUrl: '',
-    model: 'gpt-5.4',
-    reasoningEffort: 'medium',
-    useCustomModel: false,
-    apiKey: '',
-    toolServers: [],
-    localToolServers: [],
-    ...initialSettings,
-  };
+  const defaultSettings: OrchestratorSettings = normalizeSettings(initialSettings);
 
   const [settings, setSettings] = React.useState<OrchestratorSettings>(defaultSettings);
   const [tempSettings, setTempSettings] = React.useState<OrchestratorSettings>(settings);
@@ -90,9 +115,9 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
 
   const getServersForScope = React.useCallback(
     (scope: ToolServerScope, currentSettings: OrchestratorSettings = tempSettings) =>
-      scope === 'backend'
-        ? currentSettings.toolServers || []
-        : currentSettings.localToolServers || [],
+      (currentSettings.toolServers || []).filter(
+        (server) => (server.scope || 'backend') === scope
+      ),
     [tempSettings]
   );
 
@@ -100,7 +125,10 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     (scope: ToolServerScope, nextServers: ToolServer[]) => {
       setTempSettings((prev) => ({
         ...prev,
-        [scope === 'backend' ? 'toolServers' : 'localToolServers']: nextServers,
+        toolServers: [
+          ...(prev.toolServers || []).filter((server) => (server.scope || 'backend') !== scope),
+          ...nextServers.map((server) => ({ ...server, scope })),
+        ],
       }));
     },
     []
@@ -114,15 +142,15 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   // Update settings when initialSettings prop changes
   React.useEffect(() => {
     if (initialSettings) {
-      const backendOption = BACKEND_OPTIONS.find((opt) => opt.value === initialSettings.backend);
+      const normalizedSettings = normalizeSettings(initialSettings);
+      const backendOption = BACKEND_OPTIONS.find((opt) => opt.value === normalizedSettings.backend);
 
       // Check if the model is in the predefined list for this backend
-      const modelInList = backendOption?.models?.includes(initialSettings.model || '');
+      const modelInList = backendOption?.models?.includes(normalizedSettings.model || '');
 
       const updatedSettings = {
-        ...settings,
-        ...initialSettings,
-        backendLabel: backendOption!.label,
+        ...normalizedSettings,
+        backendLabel: backendOption?.label || normalizedSettings.backendLabel,
         // If model is not in the predefined list, automatically set useCustomModel to true
         // Unless useCustomModel is explicitly provided in initialSettings
         useCustomModel:
@@ -139,10 +167,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   React.useEffect(() => {
     if (isModalOpen) {
       (tempSettings.toolServers || []).forEach((server) => {
-        checkMCPServerConnectivity('backend', server.url);
-      });
-      (tempSettings.localToolServers || []).forEach((server) => {
-        checkMCPServerConnectivity('local', server.url);
+        checkMCPServerConnectivity(server.scope || 'backend', server.url);
       });
     }
 
@@ -192,10 +217,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
       let result: MCPConnectivityResult;
 
       if (scope === 'local') {
-        if (!checkLocalMCPServerConnectivity) {
-          throw new Error('Local MCP checks are not available in this app');
-        }
-        result = await checkLocalMCPServerConnectivity(url);
+        result = await checkLocalMcpServerConnectivity(url);
       } else {
         const response = await fetch(httpServerUrl + '/check-mcp-servers', {
           method: 'POST',
@@ -445,13 +467,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     name?: string
   ): Promise<MCPConnectivityResult> => {
     if (scope === 'local') {
-      if (!checkLocalMCPServerConnectivity) {
-        return {
-          status: 'disconnected',
-          error: 'Local MCP checks are not available in this app',
-        };
-      }
-      return checkLocalMCPServerConnectivity(url);
+      return checkLocalMcpServerConnectivity(url);
     }
 
     const response = await fetch(httpServerUrl + '/validate-mcp-server', {
@@ -718,8 +734,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   };
 
   const currentBackendOption = BACKEND_OPTIONS.find((opt) => opt.value === tempSettings.backend);
-  const totalToolServerCount =
-    (tempSettings.toolServers?.length || 0) + (tempSettings.localToolServers?.length || 0);
+  const totalToolServerCount = tempSettings.toolServers?.length || 0;
 
   const renderServerList = (
     scope: ToolServerScope,

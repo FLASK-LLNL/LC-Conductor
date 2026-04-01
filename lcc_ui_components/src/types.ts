@@ -46,7 +46,7 @@ export interface OrchestratorSettings {
   apiKey: string;
   backendLabel: string;
   toolServers?: ToolServer[];
-  localToolServers?: ToolServer[];
+  localToolServers?: ToolServer[]; // Deprecated compatibility alias for local-scoped entries.
 }
 
 export interface BackendOption {
@@ -70,7 +70,23 @@ export interface SettingsButtonProps {
   username?: string;
   className?: string;
   httpServerUrl: string;
-  checkLocalMCPServerConnectivity?: (url: string) => Promise<MCPConnectivityResult>;
+}
+
+export interface LocalMcpProxyRequest {
+  requestId?: string;
+  requestKind?: 'list-tools' | 'call-tool';
+  servers?: string[];
+  serverUrl?: string;
+  toolName?: string;
+  arguments?: Record<string, unknown>;
+}
+
+export interface LocalMcpProxyResponse {
+  action: 'local-mcp-response';
+  requestId: string;
+  ok: boolean;
+  result?: Record<string, unknown>;
+  error?: string;
 }
 
 // ============================================================================

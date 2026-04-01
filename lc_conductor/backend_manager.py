@@ -19,11 +19,22 @@ from charge.clients.agentframework import AgentFrameworkBackend
 
 from functools import partial
 from lc_conductor.tool_registration import (
-    ToolList,
     list_server_urls,
     list_server_tools,
 )
 from lc_conductor.backend_helper_function import RunSettings
+from lc_conductor.local_mcp_proxy import (
+    attach_local_mcp_tools,
+    list_local_mcp_tools,
+)
+from lc_conductor.tooling import (
+    BuiltinToolDefinition,
+    MCPToolDefinition,
+    ToolDescriptor,
+    ToolRuntime,
+    ToolServerConfig,
+    resolve_builtin_tool_descriptors,
+)
 
 # Mapping from backend name to human-readable labels. Mirrored from the frontend
 BACKEND_LABELS = {
@@ -48,10 +59,9 @@ class TaskManager:
         self.clogger = CallbackLogger(websocket, source="backend_manager")
         self.max_workers = max_workers
         self.executor = ProcessPoolExecutor(max_workers=max_workers)
-        self.available_tools: Optional[list[str]] = None
-        self.available_builtin_tool_ids: Optional[list[str]] = None
-        self.local_tool_servers: list[str] = []
-        self.selected_local_mcp_tools: dict[str, list[Any]] = {}
+        self.configured_tool_servers: list[ToolServerConfig] = []
+        self.discovered_local_mcp_tools: dict[str, list[MCPToolDefinition]] = {}
+        self.selected_tool_runtime: Optional[ToolRuntime] = None
 
     def _attach_done_callback(self, task: asyncio.Task) -> None:
         """Attach a done-callback to a background task so exceptions are observed.
@@ -138,6 +148,7 @@ class ActionManager:
         experiment: Experiment,
         args,
         username: str,
+        builtin_tool_definitions: Optional[list[BuiltinToolDefinition]] = None,
     ):
         self.task_manager = task_manager
         self.experiment = experiment
@@ -146,6 +157,12 @@ class ActionManager:
         self.run_settings: RunSettings = RunSettings()
         self.reasoning_effort: Literal["low", "medium", "high"] = "medium"
         self.websocket = task_manager.websocket
+        self.builtin_tool_definitions = builtin_tool_definitions or []
+        if not self.task_manager.configured_tool_servers:
+            self.task_manager.configured_tool_servers = [
+                ToolServerConfig(url=server_url, scope="backend")
+                for server_url in list_server_urls()
+            ]
 
     def setup_run_settings(self, data: dict[str, Any]):
         if "runSettings" in data:
@@ -185,13 +202,127 @@ class ActionManager:
             }
         )
 
+    def _configured_local_tool_servers(self) -> list[str]:
+        return [
+            server.url
+            for server in self.task_manager.configured_tool_servers
+            if server.scope == "local"
+        ]
+
+    def _configured_backend_tool_servers(self) -> list[str]:
+        backend_servers = [
+            server.url
+            for server in self.task_manager.configured_tool_servers
+            if server.scope == "backend"
+        ]
+        return backend_servers or list_server_urls()
+
+    def _build_tool_runtime(
+        self,
+        descriptors: list[ToolDescriptor] | None = None,
+    ) -> ToolRuntime:
+        if descriptors is None:
+            runtime = ToolRuntime(
+                tools=[
+                    *[
+                        ToolDescriptor(
+                            kind="mcp",
+                            identifier=server_url,
+                            server=server_url,
+                            execution_scope="backend",
+                        )
+                        for server_url in self._configured_backend_tool_servers()
+                    ],
+                    *resolve_builtin_tool_descriptors(
+                        None,
+                        self.builtin_tool_definitions,
+                    ),
+                    *[
+                        ToolDescriptor(
+                            kind="mcp",
+                            identifier=server_url,
+                            server=server_url,
+                            names=[tool.name for tool in local_tools],
+                            description="Local MCP server proxied through the browser session.",
+                            execution_scope="local",
+                            tools=list(local_tools),
+                        )
+                        for server_url, local_tools in self.task_manager.discovered_local_mcp_tools.items()
+                    ],
+                ]
+            )
+            return attach_local_mcp_tools(self.websocket, runtime)
+
+        selected_builtin_tool_ids: list[str] = []
+        selected_descriptors: list[ToolDescriptor] = []
+
+        for descriptor in descriptors:
+            if descriptor.kind == "builtin":
+                selected_builtin_tool_ids.append(descriptor.identifier)
+                continue
+
+            selected_descriptors.append(descriptor)
+
+        runtime = ToolRuntime(
+            tools=[
+                *selected_descriptors,
+                *resolve_builtin_tool_descriptors(
+                    selected_builtin_tool_ids,
+                    self.builtin_tool_definitions,
+                ),
+            ]
+        )
+        return attach_local_mcp_tools(self.websocket, runtime)
+
+    def selected_tool_runtime(self) -> ToolRuntime:
+        if self.task_manager.selected_tool_runtime is not None:
+            return self.task_manager.selected_tool_runtime
+        return self._build_tool_runtime()
+
     async def handle_list_tools(self, *args, **kwargs) -> None:
-        tools = []
-        server_list = list_server_urls()
+        tools: list[ToolDescriptor] = []
+        server_list = self._configured_backend_tool_servers()
         for server in server_list:
             tool_list = await list_server_tools([server])
             tool_names = [name for name, _ in tool_list]
-            tools.append(ToolList(server=server, names=tool_names))
+            tools.append(
+                ToolDescriptor(
+                    kind="mcp",
+                    identifier=server,
+                    server=server,
+                    names=tool_names,
+                    execution_scope="backend",
+                )
+            )
+
+        try:
+            local_tool_map = await list_local_mcp_tools(
+                self.websocket,
+                self._configured_local_tool_servers(),
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to enumerate local MCP tools: {exc}")
+            local_tool_map = {}
+
+        self.task_manager.discovered_local_mcp_tools = local_tool_map
+        for server, local_tools in local_tool_map.items():
+            tools.append(
+                ToolDescriptor(
+                    kind="mcp",
+                    identifier=server,
+                    server=server,
+                    names=[tool.name for tool in local_tools],
+                    description="Local MCP server proxied through the browser session.",
+                    execution_scope="local",
+                    tools=local_tools,
+                )
+            )
+
+        tools.extend(
+            tool_definition.to_descriptor()
+            for tool_definition in self.builtin_tool_definitions
+        )
+
         await self.websocket.send_json(
             {
                 "type": "available-tools-response",
@@ -224,12 +355,35 @@ class ActionManager:
                     ),
                     "useCustomModel": False,
                     "apiKey": "",
+                    "toolServers": [
+                        tool_server.json()
+                        for tool_server in self.task_manager.configured_tool_servers
+                    ],
                 },
             }
         )
         return agent_backend.backend, model, base_url
 
     async def handle_orchestrator_settings_update(self, data: dict) -> None:
+        tool_server_payloads = [
+            server
+            for server in data.get("toolServers", [])
+            if isinstance(server, dict) and server.get("url")
+        ]
+        tool_server_payloads.extend(
+            {
+                **server,
+                "scope": "local",
+            }
+            for server in data.get("localToolServers", [])
+            if isinstance(server, dict) and server.get("url")
+        )
+        self.task_manager.configured_tool_servers = [
+            ToolServerConfig.from_json(server)
+            for server in tool_server_payloads
+        ]
+        self.task_manager.discovered_local_mcp_tools = {}
+        self.task_manager.selected_tool_runtime = None
 
         backend = data["backend"]
         model = data["model"]
@@ -326,10 +480,12 @@ class ActionManager:
         """Handle select-tools-for-task action."""
         logger.info("Select tools for task")
         logger.info(f"Data: {data}")
-        available_tools = []
-        for server in data["enabledTools"]["selectedTools"]:
-            available_tools.append(server["tool_server"]["server"])
-        self.task_manager.available_tools = available_tools
+        descriptors = [
+            ToolDescriptor.from_json(server["tool_server"])
+            for server in data.get("enabledTools", {}).get("selectedTools", [])
+            if isinstance(server, dict) and isinstance(server.get("tool_server"), dict)
+        ]
+        self.task_manager.selected_tool_runtime = self._build_tool_runtime(descriptors)
 
     async def handle_get_username(self, _: dict) -> None:
         await self.websocket.send_json(

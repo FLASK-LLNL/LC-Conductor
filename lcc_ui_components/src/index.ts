@@ -14,6 +14,13 @@ export { MarkdownText } from './MarkdownText.js';
 
 // Constants
 export { BACKEND_OPTIONS } from './constants.js';
+export {
+  callLocalMcpTool,
+  checkLocalMcpServerConnectivity,
+  handleLocalMcpProxyRequest,
+  listLocalMcpTools,
+  normalizeMcpUrl,
+} from './localMcp.js';
 
 // Types
 export type {
@@ -27,6 +34,8 @@ export type {
   OrchestratorSettings,
   BackendOption,
   SettingsButtonProps,
+  LocalMcpProxyRequest,
+  LocalMcpProxyResponse,
 
   // Sidebar types
   SidebarMessage,
