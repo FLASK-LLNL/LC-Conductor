@@ -323,7 +323,11 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
                     <div className="badge badge-primary">{msg.source}</div>
                   </div>
                   <div className="text-sm text-secondary">
-                    <MarkdownText text={msg.message} />
+                    <MarkdownText
+                      text={msg.message}
+                      collapsibleCodeBlocks
+                      defaultCollapsedCodeBlocks
+                    />
                   </div>
                   {msg.smiles && renderMolecule && (
                     <div className="mt-3 bg-white/50 rounded-lg p-2 flex justify-center">
