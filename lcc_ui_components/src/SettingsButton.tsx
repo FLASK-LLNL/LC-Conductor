@@ -6,6 +6,7 @@
 //#############################################################################
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, Trash2, Edit2, Loader2, Settings, Wrench } from 'lucide-react';
 import type {
   MCPConnectivityResult,
@@ -104,7 +105,13 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
 
   // Store active connections for cleanup
   const activeConnectionsRef = React.useRef<Map<string, AbortController>>(new Map());
+  const indicatorRefs = React.useRef<Map<string, HTMLDivElement>>(new Map());
   const tooltipRef = React.useRef<HTMLDivElement>(null);
+  const [tooltipPosition, setTooltipPosition] = React.useState<{
+    left: number;
+    top: number;
+    placement: 'above' | 'below';
+  } | null>(null);
 
   const serverKey = React.useCallback((scope: ToolServerScope, url: string) => `${scope}:${url}`, []);
 
@@ -132,6 +139,155 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   const definedTools = React.useCallback(
     (tools: MCPConnectivityResult['tools']) => (tools && tools.length > 0 ? tools : undefined),
     []
+  );
+
+  const setIndicatorRef = React.useCallback((serverId: string, node: HTMLDivElement | null) => {
+    if (node) {
+      indicatorRefs.current.set(serverId, node);
+      return;
+    }
+    indicatorRefs.current.delete(serverId);
+  }, []);
+
+  const updateTooltipPosition = React.useCallback((serverId: string | null) => {
+    if (!serverId) {
+      setTooltipPosition(null);
+      return;
+    }
+
+    const indicator = indicatorRefs.current.get(serverId);
+    if (!indicator) {
+      return;
+    }
+
+    const rect = indicator.getBoundingClientRect();
+    const estimatedTooltipWidth = 320;
+    const horizontalPadding = 12;
+    const verticalGap = 10;
+    const left = Math.min(
+      window.innerWidth - estimatedTooltipWidth - horizontalPadding,
+      Math.max(horizontalPadding, rect.right - estimatedTooltipWidth)
+    );
+    const shouldRenderAbove =
+      rect.bottom + 280 > window.innerHeight && rect.top > window.innerHeight / 2;
+
+    setTooltipPosition({
+      left,
+      top: shouldRenderAbove ? rect.top - verticalGap : rect.bottom + verticalGap,
+      placement: shouldRenderAbove ? 'above' : 'below',
+    });
+  }, []);
+
+  const activeTooltipServer = pinnedServer || hoveredServer;
+
+  React.useEffect(() => {
+    if (!activeTooltipServer) {
+      setTooltipPosition(null);
+      return;
+    }
+
+    const updatePosition = () => updateTooltipPosition(activeTooltipServer);
+    updatePosition();
+
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [activeTooltipServer, updateTooltipPosition]);
+
+  const handleIndicatorMouseLeave = React.useCallback(
+    (event: React.MouseEvent<HTMLDivElement>, scopedId: string) => {
+      const relatedTarget = event.relatedTarget as Node | null;
+      if (relatedTarget && tooltipRef.current?.contains(relatedTarget)) {
+        return;
+      }
+      setHoveredServer((current) => (current === scopedId ? null : current));
+    },
+    []
+  );
+
+  const handleTooltipMouseLeave = React.useCallback(
+    (event: React.MouseEvent<HTMLDivElement>, scopedId: string) => {
+      const relatedTarget = event.relatedTarget as Node | null;
+      const indicator = indicatorRefs.current.get(scopedId);
+      if (relatedTarget && indicator?.contains(relatedTarget)) {
+        return;
+      }
+      if (pinnedServer !== scopedId) {
+        setHoveredServer((current) => (current === scopedId ? null : current));
+      }
+    },
+    [pinnedServer]
+  );
+
+  const renderServerTooltip = React.useCallback(
+    (
+      scopedId: string,
+      scope: ToolServerScope,
+      serverStatus: {
+        status: 'checking' | 'connected' | 'disconnected';
+        tools?: MCPConnectivityResult['tools'];
+        error?: string;
+      } | undefined
+    ) => {
+      if (
+        !tooltipPosition ||
+        typeof document === 'undefined' ||
+        (hoveredServer !== scopedId && pinnedServer !== scopedId) ||
+        serverStatus?.status !== 'connected' ||
+        !serverStatus.tools ||
+        serverStatus.tools.length === 0
+      ) {
+        return null;
+      }
+
+      return createPortal(
+        <div
+          ref={tooltipRef}
+          className="ws-tooltip"
+          onMouseEnter={() => setHoveredServer(scopedId)}
+          onMouseLeave={(event) => handleTooltipMouseLeave(event, scopedId)}
+          style={{
+            position: 'fixed',
+            left: `${tooltipPosition.left}px`,
+            top: `${tooltipPosition.top}px`,
+            transform: tooltipPosition.placement === 'above' ? 'translateY(-100%)' : undefined,
+            zIndex: 1200,
+            minWidth: '260px',
+            maxWidth: '320px',
+          }}
+        >
+          <p className="text-sm font-semibold mb-2 text-primary">
+            Available Tools
+            <span className="helper-text" style={{ marginLeft: '0.5rem' }}>
+              ({scope === 'local' ? 'MCP local' : 'MCP'})
+            </span>
+          </p>
+          <ul className="text-sm space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+            {serverStatus.tools.map((tool, idx) => (
+              <li key={idx} className="text-secondary">
+                <span className="text-mono emphasized-text">• {tool.name}</span>
+                {tool.description && (
+                  <p
+                    className="text-xs text-secondary"
+                    style={{ marginLeft: '0.75rem', marginTop: '0.125rem' }}
+                  >
+                    {tool.description.length > 80
+                      ? `${tool.description.substring(0, 80)}...`
+                      : tool.description}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>,
+        document.body
+      );
+    },
+    [handleTooltipMouseLeave, hoveredServer, pinnedServer, tooltipPosition]
   );
 
   // Update settings when initialSettings prop changes
@@ -818,9 +974,20 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                   <div className="flex items-center gap-md">
                     <div
                       className="relative connectivity-indicator"
-                      onMouseEnter={() => setHoveredServer(scopedId)}
-                      onMouseLeave={() => setHoveredServer(null)}
-                      onClick={() => setPinnedServer(pinnedServer === scopedId ? null : scopedId)}
+                      ref={(node) => setIndicatorRef(scopedId, node)}
+                      onMouseEnter={() => {
+                        setHoveredServer(scopedId);
+                        updateTooltipPosition(scopedId);
+                      }}
+                      onMouseLeave={(event) => handleIndicatorMouseLeave(event, scopedId)}
+                      onClick={() => {
+                        if (pinnedServer === scopedId) {
+                          setPinnedServer(null);
+                          return;
+                        }
+                        updateTooltipPosition(scopedId);
+                        setPinnedServer(scopedId);
+                      }}
                       style={{ cursor: 'pointer' }}
                     >
                       {serverStatus?.status === 'checking' ? (
@@ -839,38 +1006,6 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                           }
                         />
                       )}
-
-                      {(hoveredServer === scopedId || pinnedServer === scopedId) &&
-                        serverStatus?.status === 'connected' &&
-                        serverStatus.tools &&
-                        serverStatus.tools.length > 0 && (
-                          <div
-                            ref={tooltipRef}
-                            className="ws-tooltip"
-                            style={{ left: 'auto', right: 0, top: '2.5rem' }}
-                          >
-                            <p className="text-sm font-semibold mb-2 text-primary">
-                              Available Tools:
-                            </p>
-                            <ul className="text-sm space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                              {serverStatus.tools.map((tool, idx) => (
-                                <li key={idx} className="text-secondary">
-                                  <span className="text-mono emphasized-text">• {tool.name}</span>
-                                  {tool.description && (
-                                    <p
-                                      className="text-xs text-secondary"
-                                      style={{ marginLeft: '0.75rem', marginTop: '0.125rem' }}
-                                    >
-                                      {tool.description.length > 80
-                                        ? `${tool.description.substring(0, 80)}...`
-                                        : tool.description}
-                                    </p>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
                     </div>
 
                     <div className="flex-1">
@@ -895,6 +1030,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                     </div>
                   </div>
                 )}
+                {renderServerTooltip(scopedId, scope, serverStatus)}
               </div>
             );
           })}

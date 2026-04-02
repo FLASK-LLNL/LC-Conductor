@@ -21,6 +21,36 @@ from lc_conductor.tooling import MCPToolDefinition, ToolDescriptor, ToolRuntime
 _PENDING_LOCAL_MCP_RESPONSES: dict[WebSocket, dict[str, asyncio.Future]] = {}
 
 
+class LocalMcpProxyDisconnected(ConnectionError):
+    """Raised when the browser websocket is no longer available for MCP proxying."""
+
+
+def _websocket_is_connected(websocket: WebSocket) -> bool:
+    for attr in ("client_state", "application_state"):
+        state = getattr(websocket, attr, None)
+        state_name = getattr(state, "name", None)
+        if state_name == "DISCONNECTED":
+            return False
+    return True
+
+
+async def _send_json_if_connected(websocket: WebSocket, payload: dict[str, Any]) -> None:
+    if not _websocket_is_connected(websocket):
+        raise LocalMcpProxyDisconnected("WebSocket disconnected")
+
+    try:
+        await websocket.send_json(payload)
+    except RuntimeError as exc:
+        raise LocalMcpProxyDisconnected("WebSocket disconnected") from exc
+
+
+def cancel_pending_local_mcp_requests(websocket: WebSocket) -> None:
+    pending_requests = _PENDING_LOCAL_MCP_RESPONSES.pop(websocket, {})
+    for future in pending_requests.values():
+        if not future.done():
+            future.cancel()
+
+
 def resolve_local_mcp_response(websocket: WebSocket, data: dict[str, Any]) -> bool:
     request_id = data.get("requestId")
     if not isinstance(request_id, str):
@@ -49,17 +79,20 @@ async def _await_local_mcp_response(
 
     future: asyncio.Future = asyncio.Future()
     pending_requests[request_id] = future
-    await websocket.send_json(
+    await _send_json_if_connected(
+        websocket,
         {
             "type": "local-mcp-request",
             "requestId": request_id,
             "requestKind": request_kind,
             **payload,
-        }
+        },
     )
 
     try:
         response = await asyncio.wait_for(future, timeout=timeout)
+    except asyncio.CancelledError as exc:
+        raise LocalMcpProxyDisconnected("WebSocket disconnected") from exc
     finally:
         pending_requests.pop(request_id, None)
         if not pending_requests:

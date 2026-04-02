@@ -25,7 +25,9 @@ from lc_conductor.tool_registration import (
 from lc_conductor.backend_helper_function import RunSettings
 from lc_conductor.local_mcp_proxy import (
     attach_local_mcp_tools,
+    cancel_pending_local_mcp_requests,
     list_local_mcp_tools,
+    LocalMcpProxyDisconnected,
 )
 from lc_conductor.tooling import (
     BuiltinToolDefinition,
@@ -135,6 +137,7 @@ class TaskManager:
 
     async def close(self) -> None:
         await self.cancel_current_task()
+        cancel_pending_local_mcp_requests(self.websocket)
         self.executor.shutdown(wait=False, cancel_futures=True)
         self.clogger.unbind()
 
@@ -313,6 +316,11 @@ class ActionManager:
                 self.websocket,
                 self._configured_local_tool_servers(),
             )
+        except LocalMcpProxyDisconnected:
+            logger.info(
+                "Skipping local MCP tool enumeration because the websocket disconnected"
+            )
+            return
         except Exception as exc:
             logger.warning(f"Failed to enumerate local MCP tools: {exc}")
             local_tool_map = {}
@@ -336,12 +344,17 @@ class ActionManager:
             for tool_definition in self.builtin_tool_definitions
         )
 
-        await self.websocket.send_json(
-            {
-                "type": "available-tools-response",
-                "tools": [tool.json() for tool in tools] if tools else [],
-            }
-        )
+        try:
+            await self.websocket.send_json(
+                {
+                    "type": "available-tools-response",
+                    "tools": [tool.json() for tool in tools] if tools else [],
+                }
+            )
+        except RuntimeError:
+            logger.info(
+                "Skipping available tools response because the websocket disconnected"
+            )
 
     async def report_orchestrator_config(self) -> Tuple[str, str, str]:
         agent_backend = AgentFactory.default_backend()
