@@ -130,6 +130,7 @@ class ToolDescriptor:
     description: str | None = None
     execution_scope: ToolExecutionScope = "backend"
     tools: list[MCPToolDefinition] | None = None
+    allowed_tool_names: list[str] | None = None
     callable_tool: Any | None = None
 
     @classmethod
@@ -150,6 +151,7 @@ class ToolDescriptor:
                 if isinstance(tool, dict) and tool.get("name")
             ]
             or None,
+            allowed_tool_names=list(payload.get("allowedToolNames") or []) or None,
         )
 
     def json(self) -> dict[str, Any]:
@@ -161,6 +163,7 @@ class ToolDescriptor:
             "description": self.description,
             "executionScope": self.execution_scope,
             "tools": [tool.json() for tool in self.tools] if self.tools else None,
+            "allowedToolNames": self.allowed_tool_names,
         }
 
 
@@ -237,8 +240,29 @@ class ToolRuntime:
             tool_map[tool.server] = list(tool.tools)
         return tool_map
 
+    @property
+    def mcp_server_allowed_tools(self) -> dict[str, list[str]]:
+        tool_map: dict[str, list[str]] = {}
+        for tool in self.tools:
+            if tool.kind != "mcp" or tool.execution_scope != "backend" or not tool.server:
+                continue
+
+            allowed_tool_names = tool.allowed_tool_names
+            if allowed_tool_names is None and tool.tools:
+                allowed_tool_names = [mcp_tool.name for mcp_tool in tool.tools]
+            if allowed_tool_names is None and tool.names:
+                allowed_tool_names = list(tool.names)
+            if allowed_tool_names is None:
+                continue
+
+            unique_names = list(dict.fromkeys(name for name in allowed_tool_names if name))
+            if unique_names:
+                tool_map[tool.server] = unique_names
+        return tool_map
+
     def task_kwargs(self) -> dict[str, Any]:
         return {
             "server_urls": self.mcp_server_urls,
+            "mcp_server_allowed_tools": self.mcp_server_allowed_tools,
             "builtin_tools": self.direct_tools,
         }
