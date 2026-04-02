@@ -12,7 +12,7 @@ from loguru import logger
 import requests
 from pydantic import BaseModel
 import json
-from typing import Optional, Tuple, List, Dict
+from typing import Any, Optional, Tuple, List, Dict
 import time
 import os
 import re
@@ -47,6 +47,8 @@ class ToolList:
     description: Optional[str] = None
     kind: str = "mcp"
     identifier: Optional[str] = None
+    executionScope: str = "backend"
+    tools: Optional[list[dict[str, Any]]] = None
 
     def json(self):
         return asdict(self)

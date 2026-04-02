@@ -15,6 +15,23 @@ export interface ToolServer {
   id: string;
   url: string;
   name?: string; // Optional display name
+  scope?: ToolServerScope;
+}
+
+export type ToolServerScope = 'backend' | 'local';
+export type ToolExecutionScope = 'backend' | 'local';
+
+export interface MCPToolDefinition {
+  name: string;
+  description?: string;
+  inputSchema?: Record<string, unknown>;
+}
+
+export interface MCPConnectivityResult {
+  status: 'connected' | 'disconnected';
+  url?: string;
+  tools?: MCPToolDefinition[];
+  error?: string;
 }
 
 export type ReasoningEffort = 'low' | 'medium' | 'high';
@@ -52,6 +69,23 @@ export interface SettingsButtonProps {
   username?: string;
   className?: string;
   httpServerUrl: string;
+}
+
+export interface LocalMcpProxyRequest {
+  requestId?: string;
+  requestKind?: 'list-tools' | 'call-tool';
+  servers?: string[];
+  serverUrl?: string;
+  toolName?: string;
+  arguments?: Record<string, unknown>;
+}
+
+export interface LocalMcpProxyResponse {
+  action: 'local-mcp-response';
+  requestId: string;
+  ok: boolean;
+  result?: Record<string, unknown>;
+  error?: string;
 }
 
 // ============================================================================
