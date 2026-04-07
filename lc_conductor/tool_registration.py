@@ -494,10 +494,10 @@ async def list_server_tools(urls: list[str]):
     mcp_server_tool_list = await list_mcp_tools_direct(urls=urls)
 
     for server, tools in mcp_server_tool_list.items():
-        logger.info(f"MCP Server: {server}")
+        logger.trace(f"MCP Server: {server}")
         for tool in tools:
             name = tool["name"]
-            logger.info(f"\tTool: {name}")
+            logger.trace(f"\tTool: {name}")
             tool_list.append((name, server))
 
     return tool_list
