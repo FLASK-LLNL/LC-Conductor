@@ -22,13 +22,10 @@ from mcp.server.fastmcp import FastMCP
 from charge.utils.mcp_workbench_utils import (
     _setup_mcp_workbenches,
     _close_mcp_workbenches,
+    list_mcp_tools_direct,
 )
 
 from charge.utils.system_utils import check_server_paths
-from autogen_ext.tools.mcp import McpWorkbench, StreamableHttpServerParams
-from charge.clients.autogen_utils import (
-    _list_wb_tools,
-)
 
 
 class ValidateMCPServerRequest(BaseModel):
@@ -492,11 +489,18 @@ def list_server_urls() -> list[str]:
 async def list_server_tools(urls: list[str]):
     wh_token = os.getenv("FLASK_WORMHOLE_TOKEN", None)
     wh_header = {"X-Token": wh_token} if wh_token else {}
-    workbenches = [
-        McpWorkbench(StreamableHttpServerParams(url=server, headers=wh_header))
-        for server in urls
-    ]
-    return await _list_wb_tools(workbenches)
+
+    tool_list = []
+    mcp_server_tool_list = await list_mcp_tools_direct(urls=urls)
+
+    for server, tools in mcp_server_tool_list.items():
+        logger.info(f"MCP Server: {server}")
+        for tool in tools:
+            name = tool["name"]
+            logger.info(f"\tTool: {name}")
+            tool_list.append((name, server))
+
+    return tool_list
 
 
 def try_get_public_hostname():
