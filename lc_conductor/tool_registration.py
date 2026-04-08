@@ -238,7 +238,9 @@ def register_tool_server(port, host, name, copilot_port, copilot_host):
             continue
 
 
-async def _check_mcp_connectivity(url: str, timeout: float) -> List[Dict]:
+async def _check_mcp_connectivity(
+    url: str, timeout: float, bearer_token: Optional[str]
+) -> List[Dict]:
     """
     Connect to an MCP server and retrieve its tools list using existing workbench utilities.
 
@@ -258,12 +260,14 @@ async def _check_mcp_connectivity(url: str, timeout: float) -> List[Dict]:
     mcp_url = url if url.endswith("/mcp") else f"{url.rstrip('/')}/mcp"
 
     # First do a quick check if the URL is reachable
-    if not check_url_exists(mcp_url):
+    if not check_url_exists(mcp_url, bearer_token):
         raise Exception(f"Server at {mcp_url} is not reachable")
 
     # Now use workbench utilities to connect and get tools
     try:
-        workbenches = await _setup_mcp_workbenches(paths=[], urls=[mcp_url])
+        workbenches = await _setup_mcp_workbenches(
+            paths=[], urls=[mcp_url], bearer_token=bearer_token
+        )
 
         if not workbenches:
             raise Exception("Failed to create workbench for server")
@@ -295,7 +299,11 @@ async def _check_mcp_connectivity(url: str, timeout: float) -> List[Dict]:
 
 
 async def validate_and_register_mcp_server(
-    filename: str, url: str, name: Optional[str] = None, timeout: float = 10.0
+    filename: str,
+    url: str,
+    name: Optional[str] = None,
+    bearer_token: Optional[str] = None,
+    timeout: float = 10.0,
 ) -> Dict:
     """
     Validate an MCP server URL by connecting to it and listing tools.
@@ -315,7 +323,7 @@ async def validate_and_register_mcp_server(
 
     # Validate connectivity using existing utilities
     try:
-        tools = await _check_mcp_connectivity(mcp_url, timeout)
+        tools = await _check_mcp_connectivity(mcp_url, timeout, bearer_token)
 
         # If validation successful, register the server
         if not name:
@@ -335,7 +343,9 @@ async def validate_and_register_mcp_server(
         return {"status": "disconnected", "error": str(e), "url": url}
 
 
-async def check_registered_servers(filename: str) -> Dict[str, Dict]:
+async def check_registered_servers(
+    filename: str, bearer_token: Optional[str] = None
+) -> Dict[str, Dict]:
     """
     Check connectivity of all registered servers using existing utilities.
 
@@ -350,7 +360,9 @@ async def check_registered_servers(filename: str) -> Dict[str, Dict]:
     for key, server in SERVERS.servers.items():
         url = str(server)
         try:
-            tools = await _check_mcp_connectivity(url, timeout=5.0)
+            tools = await _check_mcp_connectivity(
+                url, timeout=5.0, bearer_token=bearer_token
+            )
             results[url] = {"status": "connected", "tools": tools}
         except Exception as e:
             results[url] = {"status": "disconnected", "error": str(e)}
@@ -397,15 +409,24 @@ def delete_registered_server(filename: str, url: str) -> Dict:
     }
 
 
-async def get_registered_servers(filename: str) -> Dict:
+async def get_registered_servers(filename: str, request: Request = None) -> Dict:
     """
     Get list of all registered MCP servers and their status.
 
     This endpoint aggregates server info and checks connectivity
     using existing validation utilities.
+
+    Args:
+        filename: Path to server cache file
+        request: Optional FastAPI Request object to extract bearer token from headers
     """
+    # Extract wormhole token from headers if request is provided
+    bearer_token = None
+    if request:
+        bearer_token = request.headers.get("x-subtoken")
+
     # Get connectivity status for all servers
-    statuses = await check_registered_servers(filename)
+    statuses = await check_registered_servers(filename, bearer_token=bearer_token)
 
     # Build response with server info and status
     servers = []
@@ -418,9 +439,6 @@ async def get_registered_servers(filename: str) -> Dict:
                 "id": key,
                 "url": url,
                 "name": server.name,
-                "address": server.address,
-                "port": server.port,
-                "path": server.path,
                 **status_info,
             }
         )
@@ -438,11 +456,16 @@ async def validate_mcp_server_endpoint(
     This endpoint uses the existing system_utils.check_url_exists() and
     mcp_workbench_utils for validation.
     """
+    # Extract wormhole token from headers
+    bearer_token = request.headers.get("x-subtoken")
+
     # Get client info for logging
     client_info = get_client_info(request)
     logger.info(f"validate request from {client_info} for MCP server: {data.url}")
 
-    result = await validate_and_register_mcp_server(filename, data.url, data.name)
+    result = await validate_and_register_mcp_server(
+        filename, data.url, data.name, bearer_token
+    )
 
     logger.info(f"Validate result: {result}")
 
@@ -486,12 +509,11 @@ def list_server_urls() -> list[str]:
     return server_urls
 
 
-async def list_server_tools(urls: list[str]):
-    wh_token = os.getenv("FLASK_WORMHOLE_TOKEN", None)
-    wh_header = {"X-Token": wh_token} if wh_token else {}
-
+async def list_server_tools(urls: list[str], bearer_token: Optional[str] = None):
     tool_list = []
-    mcp_server_tool_list = await list_mcp_tools_direct(urls=urls)
+    mcp_server_tool_list = await list_mcp_tools_direct(
+        urls=urls, bearer_token=bearer_token
+    )
 
     for server, tools in mcp_server_tool_list.items():
         logger.trace(f"MCP Server: {server}")

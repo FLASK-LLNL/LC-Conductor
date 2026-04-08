@@ -167,6 +167,16 @@ class ActionManager:
                 for server_url in list_server_urls()
             ]
 
+    def _get_wormhole_token(self) -> Optional[str]:
+        """Extract wormhole community subtoken from websocket headers."""
+        if (
+            hasattr(self.websocket, "headers")
+            and "x-subtoken" in self.websocket.headers
+        ):
+            print(f"BVE I have the subtoken {self.websocket.headers['x-subtoken']}")
+            return self.websocket.headers["x-subtoken"]
+        return None
+
     def setup_run_settings(self, data: dict[str, Any]):
         if "runSettings" in data:
             self.run_settings = RunSettings(**data["runSettings"])
@@ -224,8 +234,12 @@ class ActionManager:
         self,
         descriptors: list[ToolDescriptor] | None = None,
     ) -> ToolRuntime:
+        # Extract wormhole token from websocket headers
+        wormhole_token = self._get_wormhole_token()
+
         if descriptors is None:
             runtime = ToolRuntime(
+                bearer_token=wormhole_token,
                 tools=[
                     *[
                         ToolDescriptor(
@@ -252,7 +266,7 @@ class ActionManager:
                         )
                         for server_url, local_tools in self.task_manager.discovered_local_mcp_tools.items()
                     ],
-                ]
+                ],
             )
             return attach_local_mcp_tools(self.websocket, runtime)
 
@@ -267,13 +281,14 @@ class ActionManager:
             selected_descriptors.append(descriptor)
 
         runtime = ToolRuntime(
+            bearer_token=wormhole_token,
             tools=[
                 *selected_descriptors,
                 *resolve_builtin_tool_descriptors(
                     selected_builtin_tool_ids,
                     self.builtin_tool_definitions,
                 ),
-            ]
+            ],
         )
         return attach_local_mcp_tools(self.websocket, runtime)
 
@@ -287,9 +302,16 @@ class ActionManager:
         server_list = self._configured_backend_tool_servers()
         for server in server_list:
             try:
-                tool_list = await list_server_tools([server])
+                # Collect the wormhole community subtoken from websocket headers
+                # then pass it as the bearer token
+                wormhole_token = self._get_wormhole_token()
+                tool_list = await list_server_tools(
+                    [server], bearer_token=wormhole_token
+                )
             except Exception as exc:
-                logger.warning(f"Failed to enumerate backend MCP tools from {server}: {exc}")
+                logger.warning(
+                    f"Failed to enumerate backend MCP tools from {server}: {exc}"
+                )
                 continue
 
             tool_names = [name for name, _ in tool_list]
@@ -397,8 +419,7 @@ class ActionManager:
             if isinstance(server, dict) and server.get("url")
         ]
         self.task_manager.configured_tool_servers = [
-            ToolServerConfig.from_json(server)
-            for server in tool_server_payloads
+            ToolServerConfig.from_json(server) for server in tool_server_payloads
         ]
         self.task_manager.discovered_local_mcp_tools = {}
         self.task_manager.selected_tool_runtime = None
