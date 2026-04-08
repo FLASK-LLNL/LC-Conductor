@@ -157,6 +157,7 @@ def register_url(
         )
 
     SERVERS.servers[key] = new_server
+
     if filename:
         # Check if file exists
         file_exists = os.path.exists(filename)
@@ -500,6 +501,11 @@ async def validate_mcp_server_endpoint(
     )
 
     logger.info(f"Validate result: {result}")
+
+    # Return the updated server list so frontend can refresh
+    # This ensures the new server appears in the UI
+    if result.get("status") == "connected":
+        result["all_servers"] = list(SERVERS.servers.keys())
 
     return result
 

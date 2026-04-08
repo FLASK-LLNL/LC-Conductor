@@ -162,6 +162,7 @@ class ActionManager:
         self.websocket = task_manager.websocket
         self.builtin_tool_definitions = builtin_tool_definitions or []
         if not self.task_manager.configured_tool_servers:
+            # Sync configured_tool_servers with registered servers from SERVERS global
             self.task_manager.configured_tool_servers = [
                 ToolServerConfig(url=server_url, scope="backend")
                 for server_url in list_server_urls()
@@ -386,6 +387,17 @@ class ActionManager:
         logger.trace(
             f"Reporting orchestrator config: backend={agent_backend.backend}, model={model}, base_url={base_url}"
         )
+
+        # Resync configured_tool_servers with registered servers from SERVERS global
+        # This ensures frontend sees all registered servers, not just the initial list
+        backend_server_urls = list_server_urls()
+        self.task_manager.configured_tool_servers = [
+            ToolServerConfig(url=url, scope="backend") for url in backend_server_urls
+        ]
+        logger.info(
+            f"Synced {len(self.task_manager.configured_tool_servers)} tool servers for frontend"
+        )
+
         if agent_backend.backend in ["livai", "livchat", "llamame", "alcf"]:
             useCustomUrl = True
         else:
