@@ -28,6 +28,10 @@ from charge.utils.mcp_workbench_utils import (
 from charge.utils.system_utils import check_server_paths
 
 
+class CheckServersRequest(BaseModel):
+    urls: list[str]
+
+
 class ValidateMCPServerRequest(BaseModel):
     url: str
     name: Optional[str] = None
@@ -236,6 +240,34 @@ def register_tool_server(port, host, name, copilot_port, copilot_host):
             )
             time.sleep(10)
             continue
+
+
+async def check_mcp_servers_endpoint(request: Request, data: CheckServersRequest):
+    """
+    Check connectivity status of multiple MCP server URLs.
+    Returns status and tools for each URL.
+
+    Uses existing workbench utilities for validation.
+    """
+    from lc_conductor.tool_registration import _check_mcp_connectivity
+
+    # Extract wormhole token from headers
+    bearer_token = request.headers.get("x-subtoken")
+    if bearer_token:
+        logger.debug(f"Using wormhole token for MCP server connectivity check")
+
+    results = {}
+
+    for url in data.urls:
+        try:
+            tools = await _check_mcp_connectivity(
+                url, timeout=5.0, bearer_token=bearer_token
+            )
+            results[url] = {"status": "connected", "tools": tools}
+        except Exception as e:
+            results[url] = {"status": "disconnected", "error": str(e)}
+
+    return {"results": results}
 
 
 async def _check_mcp_connectivity(
