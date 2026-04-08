@@ -383,6 +383,9 @@ class ActionManager:
         # Access specific fields
         base_url = agent_backend.base_url
         model = agent_backend.model
+        logger.trace(
+            f"Reporting orchestrator config: backend={agent_backend.backend}, model={model}, base_url={base_url}"
+        )
         if agent_backend.backend in ["livai", "livchat", "llamame", "alcf"]:
             useCustomUrl = True
         else:
@@ -428,6 +431,14 @@ class ActionManager:
         model = data["model"]
         use_custom_url = bool(data.get("useCustomUrl"))
         base_url = data["customUrl"] if use_custom_url and data["customUrl"] else None
+
+        # Treat frontend defaults as "not set" - allow env vars to override
+        if base_url in ["http://localhost:8000/v1", "http://localhost:8000"]:
+            logger.info(
+                f"Received default URL {base_url} from frontend, will check environment variables"
+            )
+            base_url = None
+
         api_key = data["apiKey"] if data["apiKey"] else None
         reasoning_effort = data.get("reasoningEffort") or "medium"
         self.reasoning_effort = reasoning_effort
@@ -458,6 +469,9 @@ class ActionManager:
             )
             # Set up an experiment class for current endpoint
             self.experiment = Experiment(task=None)
+
+            # Report the new orchestrator config to the frontend
+            await self.report_orchestrator_config()
 
             await self.websocket.send_json(
                 {
