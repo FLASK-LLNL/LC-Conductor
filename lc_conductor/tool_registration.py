@@ -518,11 +518,11 @@ async def delete_mcp_server_endpoint(
     return result
 
 
-def list_server_urls() -> list[str]:
+def list_server_urls(bearer_token: Optional[str] = None) -> list[str]:
     server_urls = []
     invalid_keys = []
     for key, server in SERVERS.servers.items():
-        validated_server = check_server_paths(f"{server}")
+        validated_server = check_server_paths(f"{server}", bearer_token=bearer_token)
         if validated_server:
             server_urls.append(f"{server}")
         else:

@@ -165,7 +165,9 @@ class ActionManager:
             # Sync configured_tool_servers with registered servers from SERVERS global
             self.task_manager.configured_tool_servers = [
                 ToolServerConfig(url=server_url, scope="backend")
-                for server_url in list_server_urls()
+                for server_url in list_server_urls(
+                    bearer_token=self._get_wormhole_token()
+                )
             ]
 
     def _get_wormhole_token(self) -> Optional[str]:
