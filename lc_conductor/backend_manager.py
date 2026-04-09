@@ -174,8 +174,14 @@ class ActionManager:
             hasattr(self.websocket, "headers")
             and "x-subtoken" in self.websocket.headers
         ):
-            print(f"BVE I have the subtoken {self.websocket.headers['x-subtoken']}")
-            return self.websocket.headers["x-subtoken"]
+            token = self.websocket.headers["x-subtoken"]
+            logger.debug(
+                f"Extracted wormhole token from websocket headers (length: {len(token)})"
+            )
+            return token
+        logger.warning(
+            "No wormhole token found in websocket headers - MCP server authentication may fail"
+        )
         return None
 
     def setup_run_settings(self, data: dict[str, Any]):
@@ -394,9 +400,6 @@ class ActionManager:
         self.task_manager.configured_tool_servers = [
             ToolServerConfig(url=url, scope="backend") for url in backend_server_urls
         ]
-        logger.info(
-            f"Synced {len(self.task_manager.configured_tool_servers)} tool servers for frontend"
-        )
 
         if agent_backend.backend in ["livai", "livchat", "llamame", "alcf"]:
             useCustomUrl = True
