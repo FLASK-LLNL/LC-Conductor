@@ -20,12 +20,10 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 
 from charge.utils.mcp_workbench_utils import (
-    _setup_mcp_workbenches,
-    _close_mcp_workbenches,
     list_mcp_tools_direct,
 )
 
-from charge.utils.system_utils import check_server_paths
+from charge.utils.system_utils import check_server_paths, check_url_exists
 
 
 class CheckServersRequest(BaseModel):
@@ -275,11 +273,12 @@ async def _check_mcp_connectivity(
     url: str, timeout: float, bearer_token: Optional[str]
 ) -> List[Dict]:
     """
-    Connect to an MCP server and retrieve its tools list using existing workbench utilities.
+    Connect to an MCP server and retrieve its tools list using direct MCP client.
 
     Args:
         url: MCP server URL (should end with /mcp)
         timeout: Connection timeout in seconds
+        bearer_token: Optional bearer token for authentication
 
     Returns:
         List of tools with name and description
@@ -287,8 +286,6 @@ async def _check_mcp_connectivity(
     Raises:
         Exception: If connection fails or server is unreachable
     """
-    from charge.utils.system_utils import check_url_exists
-
     # Ensure URL ends with /mcp
     mcp_url = url if url.endswith("/mcp") else f"{url.rstrip('/')}/mcp"
 
@@ -296,32 +293,29 @@ async def _check_mcp_connectivity(
     if not check_url_exists(mcp_url, bearer_token):
         raise Exception(f"Server at {mcp_url} is not reachable")
 
-    # Now use workbench utilities to connect and get tools
     try:
-        workbenches = await _setup_mcp_workbenches(
-            paths=[], urls=[mcp_url], bearer_token=bearer_token
+        tools_by_server = await list_mcp_tools_direct(
+            urls=[mcp_url], paths=[], bearer_token=bearer_token
         )
 
-        if not workbenches:
-            raise Exception("Failed to create workbench for server")
+        # Extract tools for this server
+        if mcp_url not in tools_by_server:
+            raise Exception(f"Failed to get tools from server {mcp_url}")
 
-        # Get tools from the workbench
-        tools = []
-        for workbench in workbenches:
-            try:
-                workbench_tools = await workbench.list_tools()
-                for tool in workbench_tools:
-                    tools.append(
-                        {
-                            "name": tool.get("name"),
-                            "description": tool.get("description"),
-                        }
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to list tools from workbench: {e}")
+        server_tools = tools_by_server[mcp_url]
 
-        # Clean up workbenches
-        await _close_mcp_workbenches(workbenches)
+        # Check for errors
+        if isinstance(server_tools, dict) and "error" in server_tools:
+            raise Exception(server_tools["error"])
+
+        # Convert to expected format
+        tools = [
+            {
+                "name": tool.get("name"),
+                "description": tool.get("description", ""),
+            }
+            for tool in server_tools
+        ]
 
         return tools
 
