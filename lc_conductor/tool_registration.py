@@ -26,6 +26,53 @@ from charge.utils.mcp_workbench_utils import (
 from charge.utils.system_utils import check_server_paths, check_url_exists
 
 
+def extract_bearer_token_from_headers(headers_obj) -> Optional[str]:
+    """
+    Extract bearer token (x-subtoken) from request or websocket headers.
+
+    This is a common helper to extract the wormhole community subtoken used for
+    MCP server authentication. Works with FastAPI Request objects, WebSocket objects,
+    or any object with a .headers attribute.
+
+    Args:
+        headers_obj: Object with .headers attribute (Request, WebSocket, etc.)
+                     Can also be a dict-like headers object directly.
+
+    Returns:
+        Bearer token string if found, None otherwise
+    """
+    # Handle dict-like headers directly
+    if isinstance(headers_obj, dict):
+        token = headers_obj.get("x-subtoken")
+        if token:
+            logger.trace(f"Extracted bearer token from headers (length: {len(token)})")
+            return token
+        logger.trace("No bearer token (x-subtoken) found in headers")
+        return None
+
+    # Handle objects with .headers attribute (Request, WebSocket)
+    if hasattr(headers_obj, "headers"):
+        headers = headers_obj.headers
+        # Check if it's a dict-like object or has .get method
+        if hasattr(headers, "get"):
+            token = headers.get("x-subtoken")
+        elif isinstance(headers, dict):
+            token = headers.get("x-subtoken")
+        elif "x-subtoken" in headers:
+            token = headers["x-subtoken"]
+        else:
+            token = None
+
+        if token:
+            logger.trace(f"Extracted bearer token from headers (length: {len(token)})")
+            return token
+        logger.trace("No bearer token (x-subtoken) found in headers")
+        return None
+
+    logger.warning(f"Cannot extract headers from object of type: {type(headers_obj)}")
+    return None
+
+
 class CheckServersRequest(BaseModel):
     urls: list[str]
 
@@ -250,10 +297,8 @@ async def check_mcp_servers_endpoint(request: Request, data: CheckServersRequest
     """
     from lc_conductor.tool_registration import _check_mcp_connectivity
 
-    # Extract wormhole token from headers
-    bearer_token = request.headers.get("x-subtoken")
-    if bearer_token:
-        logger.debug(f"Using wormhole token for MCP server connectivity check")
+    # Extract bearer token from request headers
+    bearer_token = extract_bearer_token_from_headers(request)
 
     results = {}
 
@@ -447,10 +492,8 @@ async def get_registered_servers(filename: str, request: Request = None) -> Dict
         filename: Path to server cache file
         request: Optional FastAPI Request object to extract bearer token from headers
     """
-    # Extract wormhole token from headers if request is provided
-    bearer_token = None
-    if request:
-        bearer_token = request.headers.get("x-subtoken")
+    # Extract bearer token from request headers if provided
+    bearer_token = extract_bearer_token_from_headers(request) if request else None
 
     # Get connectivity status for all servers
     statuses = await check_registered_servers(filename, bearer_token=bearer_token)
@@ -483,8 +526,8 @@ async def validate_mcp_server_endpoint(
     This endpoint uses the existing system_utils.check_url_exists() and
     mcp_workbench_utils for validation.
     """
-    # Extract wormhole token from headers
-    bearer_token = request.headers.get("x-subtoken")
+    # Extract bearer token from request headers
+    bearer_token = extract_bearer_token_from_headers(request)
 
     # Get client info for logging
     client_info = get_client_info(request)

@@ -21,6 +21,7 @@ from functools import partial
 from lc_conductor.tool_registration import (
     list_server_urls,
     list_server_tools,
+    extract_bearer_token_from_headers,
 )
 from lc_conductor.backend_helper_function import RunSettings
 from lc_conductor.local_mcp_proxy import (
@@ -172,19 +173,7 @@ class ActionManager:
 
     def _get_wormhole_token(self) -> Optional[str]:
         """Extract wormhole community subtoken from websocket headers."""
-        if (
-            hasattr(self.websocket, "headers")
-            and "x-subtoken" in self.websocket.headers
-        ):
-            token = self.websocket.headers["x-subtoken"]
-            logger.trace(
-                f"Extracted wormhole token from websocket headers (length: {len(token)})"
-            )
-            return token
-        logger.trace(
-            "No wormhole token found in websocket headers - MCP server authentication may fail"
-        )
-        return None
+        return extract_bearer_token_from_headers(self.websocket)
 
     def setup_run_settings(self, data: dict[str, Any]):
         if "runSettings" in data:
