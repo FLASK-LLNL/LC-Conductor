@@ -177,11 +177,11 @@ class ActionManager:
             and "x-subtoken" in self.websocket.headers
         ):
             token = self.websocket.headers["x-subtoken"]
-            logger.debug(
+            logger.trace(
                 f"Extracted wormhole token from websocket headers (length: {len(token)})"
             )
             return token
-        logger.warning(
+        logger.trace(
             "No wormhole token found in websocket headers - MCP server authentication may fail"
         )
         return None
