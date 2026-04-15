@@ -605,6 +605,13 @@ async def list_server_tools(urls: list[str], bearer_token: Optional[str] = None)
     )
 
     for server, tools in mcp_server_tool_list.items():
+        # Check if tools is an error dict instead of a list
+        if isinstance(tools, dict) and "error" in tools:
+            logger.warning(
+                f"Skipping MCP server {server} due to error: {tools['error']}"
+            )
+            continue
+
         logger.trace(f"MCP Server: {server}")
         for tool in tools:
             name = tool["name"]
