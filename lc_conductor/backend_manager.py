@@ -164,12 +164,18 @@ class ActionManager:
         self.builtin_tool_definitions = builtin_tool_definitions or []
         if not self.task_manager.configured_tool_servers:
             # Sync configured_tool_servers with registered servers from SERVERS global
-            self.task_manager.configured_tool_servers = [
-                ToolServerConfig(url=server_url, scope="backend")
-                for server_url in list_server_urls(
-                    bearer_token=self._get_wormhole_token()
+            try:
+                server_urls = list_server_urls(bearer_token=self._get_wormhole_token())
+                self.task_manager.configured_tool_servers = [
+                    ToolServerConfig(url=server_url, scope="backend")
+                    for server_url in server_urls
+                ]
+            except Exception as e:
+                logger.warning(
+                    f"Failed to load cached MCP servers during initialization: {e}. "
+                    "Starting with no configured tool servers."
                 )
-            ]
+                self.task_manager.configured_tool_servers = []
 
     def _get_wormhole_token(self) -> Optional[str]:
         """Extract wormhole community subtoken from websocket headers."""
@@ -387,10 +393,19 @@ class ActionManager:
 
         # Resync configured_tool_servers with registered servers from SERVERS global
         # This ensures frontend sees all registered servers, not just the initial list
-        backend_server_urls = list_server_urls()
-        self.task_manager.configured_tool_servers = [
-            ToolServerConfig(url=url, scope="backend") for url in backend_server_urls
-        ]
+        try:
+            backend_server_urls = list_server_urls(
+                bearer_token=self._get_wormhole_token()
+            )
+            self.task_manager.configured_tool_servers = [
+                ToolServerConfig(url=url, scope="backend")
+                for url in backend_server_urls
+            ]
+        except Exception as e:
+            logger.warning(
+                f"Failed to resync MCP servers: {e}. Keeping existing configuration."
+            )
+            # Keep existing configured_tool_servers if resync fails
 
         if agent_backend.backend in ["livai", "livchat", "llamame", "alcf"]:
             useCustomUrl = True

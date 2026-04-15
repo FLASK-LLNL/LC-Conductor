@@ -56,8 +56,6 @@ def extract_bearer_token_from_headers(headers_obj) -> Optional[str]:
         # Check if it's a dict-like object or has .get method
         if hasattr(headers, "get"):
             token = headers.get("x-subtoken")
-        elif isinstance(headers, dict):
-            token = headers.get("x-subtoken")
         elif "x-subtoken" in headers:
             token = headers["x-subtoken"]
         else:
@@ -565,21 +563,37 @@ def list_server_urls(bearer_token: Optional[str] = None) -> list[str]:
     server_urls = []
     invalid_keys = []
     for key, server in SERVERS.servers.items():
-        validated_server = check_server_paths(f"{server}", bearer_token=bearer_token)
-        if validated_server:
-            server_urls.append(f"{server}")
-        else:
-            logger.info(
-                f"Previously cached URL is no longer valid - removing {server.long_name()} from cache"
+        try:
+            validated_server = check_server_paths(
+                f"{server}", bearer_token=bearer_token
+            )
+            if validated_server:
+                server_urls.append(f"{server}")
+            else:
+                logger.info(
+                    f"Previously cached URL is no longer valid - removing {server.long_name()} from cache"
+                )
+                invalid_keys.append(key)
+        except Exception as e:
+            logger.warning(
+                f"Error validating cached server {server.long_name()}: {e}. Removing from cache."
             )
             invalid_keys.append(key)
 
     for key in invalid_keys:
         SERVERS.servers.pop(key)
 
-    assert server_urls is not None, "Server URLs must be registered"
-    for url in server_urls:
-        assert url.endswith("/mcp"), f"Server URL {url} must end with /mcp"
+    # Validate URL format but don't crash - just log warnings
+    if not server_urls:
+        logger.warning(
+            "No valid MCP server URLs found. Tools from MCP servers will not be available."
+        )
+    else:
+        for url in server_urls:
+            if not url.endswith("/mcp"):
+                logger.warning(
+                    f"Server URL {url} does not end with /mcp - this may cause connection issues"
+                )
 
     return server_urls
 
