@@ -391,13 +391,19 @@ class ActionManager:
             f"Reporting orchestrator config: backend={agent_backend.backend}, model={model}, base_url={base_url}"
         )
 
+        local_server_urls = [
+            serv
+            for serv in self.task_manager.configured_tool_servers
+            if serv.scope != "backend"
+        ]
+
         # Resync configured_tool_servers with registered servers from SERVERS global
         # This ensures frontend sees all registered servers, not just the initial list
         try:
             backend_server_urls = list_server_urls(
                 bearer_token=self._get_wormhole_token()
             )
-            self.task_manager.configured_tool_servers = [
+            self.task_manager.configured_tool_servers = local_server_urls + [
                 ToolServerConfig(url=url, scope="backend")
                 for url in backend_server_urls
             ]
