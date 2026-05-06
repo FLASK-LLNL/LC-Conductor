@@ -27,6 +27,19 @@
 
    This file only adds NEW classes that are specific to
    lcc_ui_components and not available in the parent stylesheet.
+
+   COLOR SYSTEM:
+   -------------
+   This library is color-agnostic and uses CSS variables defined
+   by the parent application. The parent should define:
+   - --lcc-text-primary: Primary text color for light text on dark backgrounds
+   - --lcc-text-secondary: Secondary/heading text color
+   - --lcc-text-white: White text color
+   - --lcc-bg-primary: Primary background color for interactive elements
+   - --lcc-bg-primary-hover: Hover state for primary background
+   - --lcc-bg-primary-active: Active state for primary background
+
+   Fallback colors are provided if variables are not defined.
    ======================================== */
 
 /* ========================================
@@ -35,8 +48,8 @@
    ======================================== */
 
 .new-messages-indicator {
-  background: #8b5cf6;
-  color: #ffffff;
+  background: var(--lcc-bg-primary, #8b5cf6);
+  color: var(--lcc-text-white, #ffffff);
   padding: 0.5rem 1rem;
   border-radius: 9999px;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
@@ -51,18 +64,19 @@
 }
 
 .new-messages-indicator svg {
-  color: #ffffff;
-  stroke: #ffffff;
+  color: var(--lcc-text-white, #ffffff);
+  stroke: var(--lcc-text-white, #ffffff);
 }
 
 .new-messages-indicator:hover {
-  background: #7c3aed;
-  color: #ffffff;
+  background: var(--lcc-bg-primary-hover, #7c3aed);
+  color: var(--lcc-text-white, #ffffff);
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
   transform: translateY(-2px);
 }
 
 .new-messages-indicator:active {
+  background: var(--lcc-bg-primary-active, #6d28d9);
   transform: translateY(0);
 }
 
@@ -70,15 +84,15 @@
    COMPONENT-SPECIFIC OVERRIDES
    ======================================== */
 
-/* Reasoning Sidebar - Set base text color for dark theme */
+/* Reasoning Sidebar - Set base text color using CSS variable */
 .reasoning-sidebar {
-  color: #e9d5ff;
+  color: var(--lcc-text-primary, #e9d5ff);
 }
 
 /* Reasoning Messages Container - Inherit and set base color */
 .reasoning-messages {
   position: relative;
-  color: #e9d5ff;
+  color: var(--lcc-text-primary, #e9d5ff);
 }
 
 /* Message Cards - Use color inheritance where possible */
@@ -88,7 +102,7 @@
 
 /* Markdown Content - Set color on container, let children inherit */
 .reasoning-messages .markdown-content {
-  color: #e9d5ff;
+  color: var(--lcc-text-primary, #e9d5ff);
 }
 
 /* Specific markdown elements */
@@ -105,16 +119,16 @@
 .reasoning-messages .markdown-heading-1,
 .reasoning-messages .markdown-heading-2,
 .reasoning-messages .markdown-heading-3 {
-  color: #ddd6fe;
+  color: var(--lcc-text-secondary, #ddd6fe);
 }
 
 /* Text utility class overrides - these need !important because they're utility classes */
 .reasoning-messages .text-sm {
-  color: #e9d5ff !important;
+  color: var(--lcc-text-primary, #e9d5ff) !important;
 }
 
 .reasoning-messages .text-secondary {
-  color: #e9d5ff !important;
+  color: var(--lcc-text-primary, #e9d5ff) !important;
 }
 
 /* Optional: Add any other component-specific styles here */
