@@ -9,6 +9,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { X, Brain } from 'lucide-react';
 import { MarkdownText } from './MarkdownText.js';
 import type { SidebarMessage, SidebarProps, SidebarState, VisibleSources } from './types.js';
+import './lcc-ui-components.css';
 
 /**
  * Custom hook for managing sidebar state
@@ -123,18 +124,11 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
 
       // Ignore programmatic scrolls (within 500ms of programmatic scroll initiation)
       if (now < programmaticScrollUntilRef.current) {
-        console.log('[ReasoningSidebar] Ignoring programmatic scroll event');
         return;
       }
 
       // User manually scrolled
       const atBottom = checkIfAtBottom();
-      console.log('[ReasoningSidebar] User scroll detected:', {
-        atBottom,
-        scrollTop: container.scrollTop,
-        scrollHeight: container.scrollHeight,
-        clientHeight: container.clientHeight,
-      });
 
       if (!atBottom) {
         // User scrolled away from bottom
@@ -156,13 +150,7 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
   // Detect new messages when user has scrolled away
   useEffect(() => {
     if (messages.length > prevMessageCountRef.current) {
-      console.log('[ReasoningSidebar] New message detected:', {
-        messageCount: messages.length,
-        previousCount: prevMessageCountRef.current,
-        userHasScrolled,
-      });
       if (userHasScrolled) {
-        console.log('[ReasoningSidebar] Setting hasNewMessages to true');
         setHasNewMessages(true);
       }
     }
@@ -232,8 +220,6 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
   // Scroll to bottom handler
   const scrollToBottom = () => {
     if (sidebarRef.current) {
-      console.log('[ReasoningSidebar] Scroll to bottom clicked - re-enabling follow mode');
-
       // Re-enable follow mode FIRST
       setUserHasScrolled(false);
       setHasNewMessages(false);
@@ -436,7 +422,7 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
       {hasNewMessages && (
         <button
           onClick={scrollToBottom}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 transition-all"
+          className="new-messages-indicator"
           style={{
             position: 'absolute',
             bottom: '1rem',

@@ -39,6 +39,12 @@ export default defineConfig({
           'remark-gfm': 'remarkGfm',
           'react-syntax-highlighter': 'SyntaxHighlighter',
         },
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name === 'style.css') {
+            return 'lcc-ui-components.css';
+          }
+          return assetInfo.name;
+        },
       },
     },
     sourcemap: true,
