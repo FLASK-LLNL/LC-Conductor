@@ -9,7 +9,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { X, Brain } from 'lucide-react';
 import { MarkdownText } from './MarkdownText.js';
 import type { SidebarMessage, SidebarProps, SidebarState, VisibleSources } from './types.js';
-import './lcc-ui-components.css';
+import './style.css';
 
 /**
  * Custom hook for managing sidebar state

@@ -8,7 +8,7 @@
 // Main entry point for LC-Conductor components
 
 // Styles
-import './lcc-ui-components.css';
+import './style.css';
 
 // Components
 export { SettingsButton } from './SettingsButton.js';
