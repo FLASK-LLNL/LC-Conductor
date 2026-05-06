@@ -1,0 +1,134 @@
+/* ========================================
+   LCC UI Components Styles
+   Composable with flask-copilot/flask-app/src/style.css
+
+   This stylesheet provides styles for the LC Conductor
+   UI component library. It reuses most classes from the
+   parent flask-app style.css and only adds component-specific
+   overrides or extensions as needed.
+
+   USAGE:
+   ------
+   The lcc_ui_components library uses classes from the parent
+   flask-app style.css for most styling needs:
+
+   - Layout: .flex-col, .flex, .items-center, etc.
+   - Buttons: .btn, .btn-icon, .btn-secondary, .btn-sm
+   - Cards: .card, .card-header
+   - Sidebars: .reasoning-sidebar, .sidebar, .sidebar-resize-handle
+   - Badges: .badge, .badge-primary
+   - Text: .text-xs, .text-sm, .text-muted, .text-primary
+   - Spacing: .space-y-3, .gap-2, .mb-2, .mt-3
+   - Scrollbars: .custom-scrollbar
+   - Messages: .message-card, .reasoning-messages
+   - Filters: .filter-control, .filter-menu, .filter-menu-item
+   - Forms: .form-checkbox
+   - Empty states: .empty-state, .empty-state-icon
+
+   This file only adds NEW classes that are specific to
+   lcc_ui_components and not available in the parent stylesheet.
+
+   COLOR SYSTEM:
+   -------------
+   This library is color-agnostic and uses CSS variables defined
+   by the parent application. The parent should define:
+   - --lcc-text-primary: Primary text color for light text on dark backgrounds
+   - --lcc-text-secondary: Secondary/heading text color
+   - --lcc-text-white: White text color
+   - --lcc-bg-primary: Primary background color for interactive elements
+   - --lcc-bg-primary-hover: Hover state for primary background
+   - --lcc-bg-primary-active: Active state for primary background
+
+   Fallback colors are provided if variables are not defined.
+   ======================================== */
+
+/* ========================================
+   NEW MESSAGES INDICATOR
+   Component-specific style for ReasoningSidebar
+   ======================================== */
+
+.new-messages-indicator {
+  background: var(--lcc-bg-primary, #8b5cf6);
+  color: var(--lcc-text-white, #ffffff);
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s;
+  cursor: pointer;
+  border: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.new-messages-indicator svg {
+  color: var(--lcc-text-white, #ffffff);
+  stroke: var(--lcc-text-white, #ffffff);
+}
+
+.new-messages-indicator:hover {
+  background: var(--lcc-bg-primary-hover, #7c3aed);
+  color: var(--lcc-text-white, #ffffff);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  transform: translateY(-2px);
+}
+
+.new-messages-indicator:active {
+  background: var(--lcc-bg-primary-active, #6d28d9);
+  transform: translateY(0);
+}
+
+/* ========================================
+   COMPONENT-SPECIFIC OVERRIDES
+   ======================================== */
+
+/* Reasoning Sidebar - Set base text color using CSS variable */
+.reasoning-sidebar {
+  color: var(--lcc-text-primary, #e9d5ff);
+}
+
+/* Reasoning Messages Container - Inherit and set base color */
+.reasoning-messages {
+  position: relative;
+  color: var(--lcc-text-primary, #e9d5ff);
+}
+
+/* Message Cards - Use color inheritance where possible */
+.reasoning-messages .message-card {
+  color: inherit;
+}
+
+/* Markdown Content - Set color on container, let children inherit */
+.reasoning-messages .markdown-content {
+  color: var(--lcc-text-primary, #e9d5ff);
+}
+
+/* Specific markdown elements */
+.reasoning-messages .markdown-paragraph {
+  color: inherit;
+}
+
+.reasoning-messages .markdown-list-item,
+.reasoning-messages .markdown-numbered-list-item {
+  color: inherit;
+}
+
+/* Headings use a slightly lighter shade */
+.reasoning-messages .markdown-heading-1,
+.reasoning-messages .markdown-heading-2,
+.reasoning-messages .markdown-heading-3 {
+  color: var(--lcc-text-secondary, #ddd6fe);
+}
+
+/* Text utility class overrides - these need !important because they're utility classes */
+.reasoning-messages .text-sm {
+  color: var(--lcc-text-primary, #e9d5ff) !important;
+}
+
+.reasoning-messages .text-secondary {
+  color: var(--lcc-text-primary, #e9d5ff) !important;
+}
+
+/* Optional: Add any other component-specific styles here */

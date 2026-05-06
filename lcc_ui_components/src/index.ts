@@ -7,6 +7,9 @@
 
 // Main entry point for LC-Conductor components
 
+// Styles
+import './style.css';
+
 // Components
 export { SettingsButton } from './SettingsButton.js';
 export { ReasoningSidebar, useSidebarState } from './ReasoningSidebar.js';

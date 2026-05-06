@@ -9,6 +9,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { X, Brain } from 'lucide-react';
 import { MarkdownText } from './MarkdownText.js';
 import type { SidebarMessage, SidebarProps, SidebarState, VisibleSources } from './types.js';
+import './style.css';
 
 /**
  * Custom hook for managing sidebar state
@@ -93,11 +94,68 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
 
   const sidebarRef = useRef<HTMLDivElement>(null);
   const animatedMessagesRef = useRef<Set<string>>(new Set());
+  const [userHasScrolled, setUserHasScrolled] = useState(false);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+  const prevMessageCountRef = useRef(messages.length);
+  const programmaticScrollUntilRef = useRef<number>(0);
 
   // Save width to localStorage when it changes
   useEffect(() => {
     localStorage.setItem(storageKey, sidebarWidth.toString());
   }, [sidebarWidth, storageKey]);
+
+  // Check if scrolled to bottom
+  const checkIfAtBottom = () => {
+    const container = sidebarRef.current;
+    if (!container) return true;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    // Consider "at bottom" if within 50px of the bottom
+    return scrollHeight - scrollTop - clientHeight < 50;
+  };
+
+  // Track user scroll interactions (not programmatic scrolls)
+  useEffect(() => {
+    const container = sidebarRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const now = Date.now();
+
+      // Ignore programmatic scrolls (within 500ms of programmatic scroll initiation)
+      if (now < programmaticScrollUntilRef.current) {
+        return;
+      }
+
+      // User manually scrolled
+      const atBottom = checkIfAtBottom();
+
+      if (!atBottom) {
+        // User scrolled away from bottom
+        setUserHasScrolled(true);
+        setHasNewMessages(true);
+      } else {
+        // User scrolled back to bottom manually
+        setUserHasScrolled(false);
+        setHasNewMessages(false);
+      }
+    };
+
+    // Listen for actual scroll events (triggered by user interaction)
+    container.addEventListener('scroll', handleScroll);
+
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [isOpen]);
+
+  // Detect new messages when user has scrolled away
+  useEffect(() => {
+    if (messages.length > prevMessageCountRef.current) {
+      if (userHasScrolled) {
+        setHasNewMessages(true);
+      }
+    }
+    prevMessageCountRef.current = messages.length;
+  }, [messages, userHasScrolled]);
 
   // Handle resize
   useEffect(() => {
@@ -140,12 +198,16 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
     };
   }, [isResizing, onToggle, minWidth, maxWidth]);
 
-  // Auto-scroll sidebar to bottom when new messages arrive
+  // Auto-scroll sidebar to bottom when new messages arrive, unless user has manually scrolled away
   useEffect(() => {
-    if (sidebarRef.current && messages.length > 0 && isOpen) {
+    if (sidebarRef.current && messages.length > 0 && isOpen && !userHasScrolled) {
+      // Mark this as programmatic scroll for the next 500ms
+      programmaticScrollUntilRef.current = Date.now() + 500;
+
       // Delay scroll to allow molecules to render
       setTimeout(() => {
-        if (sidebarRef.current) {
+        if (sidebarRef.current && !userHasScrolled) {
+          programmaticScrollUntilRef.current = Date.now() + 500;
           sidebarRef.current.scrollTo({
             top: sidebarRef.current.scrollHeight,
             behavior: 'smooth',
@@ -153,7 +215,23 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
         }
       }, 100);
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, userHasScrolled]);
+
+  // Scroll to bottom handler
+  const scrollToBottom = () => {
+    if (sidebarRef.current) {
+      // Re-enable follow mode FIRST
+      setUserHasScrolled(false);
+      setHasNewMessages(false);
+
+      // Then perform the scroll (mark as programmatic for 500ms)
+      programmaticScrollUntilRef.current = Date.now() + 500;
+      sidebarRef.current.scrollTo({
+        top: sidebarRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  };
 
   if (!isOpen) {
     return (
@@ -168,7 +246,7 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
   return (
     <div
       className={`reasoning-sidebar flex-col ${isResizing ? 'resizing' : ''}`}
-      style={{ width: `${sidebarWidth}px` }}
+      style={{ width: `${sidebarWidth}px`, position: 'relative' }}
     >
       {/* Resize Handle (on left side for right sidebar) */}
       <div
@@ -339,6 +417,31 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
             })
         )}
       </div>
+
+      {/* New messages indicator */}
+      {hasNewMessages && (
+        <button
+          onClick={scrollToBottom}
+          className="new-messages-indicator"
+          style={{
+            position: 'absolute',
+            bottom: '1rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 10,
+          }}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 14l-7 7m0 0l-7-7m7 7V3"
+            />
+          </svg>
+          New messages
+        </button>
+      )}
     </div>
   );
 };
