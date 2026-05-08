@@ -190,7 +190,7 @@ class ActionManager:
         logger.trace("Save state action received")
         self.setup_run_settings(data)
 
-        experiment_context = await self.experiment.save_state()
+        experiment_context = self.experiment.save_state()
         await self.websocket.send_json(
             {"type": "save-context-response", "experimentContext": experiment_context}
         )
