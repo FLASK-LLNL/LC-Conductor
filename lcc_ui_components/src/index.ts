@@ -14,6 +14,7 @@ import './style.css';
 export { SettingsButton } from './SettingsButton.js';
 export { ReasoningSidebar, useSidebarState } from './ReasoningSidebar.js';
 export { MarkdownText } from './MarkdownText.js';
+export { RsaSettingsPanel } from './RsaSettingsPanel.js';
 
 // Constants
 export { BACKEND_OPTIONS } from './constants.js';
