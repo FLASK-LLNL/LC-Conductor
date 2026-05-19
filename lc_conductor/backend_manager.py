@@ -202,7 +202,7 @@ class ActionManager:
         if not experiment_context:
             logger.debug("No experiment context provided for loading state")
             return
-        await self.experiment.load_state(experiment_context)
+        self.experiment.load_state(experiment_context)
 
     async def _send_processing_message(
         self, message: str, source: str | None = None, **kwargs
