@@ -17,6 +17,7 @@ type LocalMcpClientEntry = {
 };
 
 const clientCache = new Map<string, Promise<LocalMcpClientEntry>>();
+const LOCAL_MCP_TOOL_TIMEOUT_MSEC = 2_147_483_647;
 
 export const normalizeMcpUrl = (url: string): string => {
   const trimmed = url.trim();
@@ -124,10 +125,15 @@ export const callLocalMcpTool = async (
   argumentsPayload: Record<string, unknown>
 ): Promise<Record<string, unknown>> =>
   withClientRetry(serverUrl, async ({ client }) =>
-    client.callTool({
-      name: toolName,
-      arguments: argumentsPayload,
-    })
+    client.callTool(
+      {
+        name: toolName,
+        arguments: argumentsPayload,
+      },
+      undefined,
+      // The MCP SDK passes this directly to setTimeout; use the maximum safe delay.
+      { timeout: LOCAL_MCP_TOOL_TIMEOUT_MSEC }
+    )
   );
 
 export const checkLocalMcpServerConnectivity = async (
