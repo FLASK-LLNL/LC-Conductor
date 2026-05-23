@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
+from typing import Any, Optional
 from uuid import uuid4
 
 from agent_framework import FunctionTool
@@ -34,7 +34,9 @@ def _websocket_is_connected(websocket: WebSocket) -> bool:
     return True
 
 
-async def _send_json_if_connected(websocket: WebSocket, payload: dict[str, Any]) -> None:
+async def _send_json_if_connected(
+    websocket: WebSocket, payload: dict[str, Any]
+) -> None:
     if not _websocket_is_connected(websocket):
         raise LocalMcpProxyDisconnected("WebSocket disconnected")
 
@@ -70,7 +72,7 @@ async def _await_local_mcp_response(
     websocket: WebSocket,
     request_kind: str,
     payload: dict[str, Any],
-    timeout: float = 30.0,
+    timeout: Optional[float] = 30.0,
 ) -> dict[str, Any]:
     request_id = str(uuid4())
     pending_requests = _PENDING_LOCAL_MCP_RESPONSES.setdefault(websocket, {})
@@ -173,7 +175,7 @@ async def call_local_mcp_tool(
             "toolName": tool_name,
             "arguments": arguments,
         },
-        timeout=120.0,
+        timeout=None,
     )
     return _format_local_mcp_call_result(result)
 
