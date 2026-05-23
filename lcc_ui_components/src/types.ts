@@ -98,6 +98,9 @@ export interface SidebarMessage {
   message: string;
   smiles: string | null;
   source: string;
+  // Server -> browser preview refs only. The browser resolves data URLs from
+  // the Agent experiment context so base64 image bytes are not duplicated here.
+  images?: Record<string, AgentImageRef>;
 }
 
 export interface VisibleSources {
@@ -116,6 +119,27 @@ export interface SidebarState {
 export interface SidebarProps extends SidebarState {
   setSidebarOpen: Dispatch<SetStateAction<boolean>>;
   rdkitModule?: any; // Optional RDKit module (for backwards compatibility)
+  resolveImageDataUrl?: (imageId: string) => string | undefined;
+}
+
+// ============================================================================
+// Attachment Types
+// ============================================================================
+
+export interface AgentAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  dataUrl: string;
+  createdAt: string;
+}
+
+export interface AgentImageRef {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
 }
 
 // ============================================================================

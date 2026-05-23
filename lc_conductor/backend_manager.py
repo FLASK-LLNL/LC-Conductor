@@ -208,14 +208,17 @@ class ActionManager:
         self, message: str, source: str | None = None, **kwargs
     ) -> None:
         """Send a processing message to the client."""
+        message_payload = {
+            "source": source or "System",
+            "message": message,
+        }
+        message_payload.update(
+            {key: value for key, value in kwargs.items() if value is not None}
+        )
         await self.websocket.send_json(
             {
                 "type": "response",
-                "message": {
-                    "source": source or "System",
-                    "message": message,
-                },
-                **kwargs,
+                "message": message_payload,
             }
         )
 

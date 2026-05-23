@@ -6,10 +6,19 @@
 //#############################################################################
 
 import React, { useRef, useEffect, useState } from 'react';
-import { X, Brain } from 'lucide-react';
+import { X, Brain, Image } from 'lucide-react';
 import { MarkdownText } from './MarkdownText.js';
-import type { SidebarMessage, SidebarProps, SidebarState, VisibleSources } from './types.js';
+import type {
+  AgentImageRef,
+  SidebarMessage,
+  SidebarProps,
+  SidebarState,
+  VisibleSources,
+} from './types.js';
 import './style.css';
+
+const getMessageId = (msg: SidebarMessage, idx: number): string =>
+  msg.id ? String(msg.id) : `${msg.timestamp}-${idx}`;
 
 /**
  * Custom hook for managing sidebar state
@@ -46,6 +55,7 @@ export interface ReasoningSidebarProps extends SidebarProps {
   maxWidth?: number;
   defaultWidth?: number;
   renderMolecule?: (smiles: string) => React.ReactNode;
+  resolveImageDataUrl?: (imageId: string) => string | undefined;
 }
 
 /**
@@ -82,6 +92,7 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
   maxWidth = 1600,
   defaultWidth = 400,
   renderMolecule,
+  resolveImageDataUrl,
   rdkitModule, // Kept for backwards compatibility but prefer renderMolecule
 }) => {
   const COLLAPSE_THRESHOLD = 5;
@@ -94,8 +105,13 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
 
   const sidebarRef = useRef<HTMLDivElement>(null);
   const animatedMessagesRef = useRef<Set<string>>(new Set());
+  const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{
+    image: AgentImageRef;
+    dataUrl: string;
+  } | null>(null);
   const prevMessageCountRef = useRef(messages.length);
   const programmaticScrollUntilRef = useRef<number>(0);
 
@@ -149,6 +165,14 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
 
   // Detect new messages when user has scrolled away
   useEffect(() => {
+    const nextMessageIds = messages.map(getMessageId);
+    const newlySeenMessageIds = nextMessageIds.filter(
+      (messageId) => !animatedMessagesRef.current.has(messageId)
+    );
+
+    setNewMessageIds(new Set(newlySeenMessageIds));
+    nextMessageIds.forEach((messageId) => animatedMessagesRef.current.add(messageId));
+
     if (messages.length > prevMessageCountRef.current) {
       if (userHasScrolled) {
         setHasNewMessages(true);
@@ -381,11 +405,8 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
           messages
             .filter((msg) => visibleSources[msg.source])
             .map((msg, idx) => {
-              const messageId = msg.id ? String(msg.id) : `${msg.timestamp}-${idx}`;
-              const isNew = !animatedMessagesRef.current.has(messageId);
-              if (isNew) {
-                animatedMessagesRef.current.add(messageId);
-              }
+              const messageId = getMessageId(msg, idx);
+              const isNew = newMessageIds.has(messageId);
 
               return (
                 <div
@@ -412,11 +433,61 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
                       {renderMolecule(msg.smiles)}
                     </div>
                   )}
+                  {msg.images && Object.keys(msg.images).length > 0 && (
+                    <div className="message-image-grid">
+                      {Object.values(msg.images).map((image) => {
+                        const dataUrl = resolveImageDataUrl?.(image.id);
+                        return (
+                          <button
+                            type="button"
+                            key={image.id}
+                            className="message-image-thumb"
+                            disabled={!dataUrl}
+                            onClick={() => dataUrl && setPreviewImage({ image, dataUrl })}
+                            title={image.name}
+                          >
+                            {dataUrl ? (
+                              <img src={dataUrl} alt={image.name} />
+                            ) : (
+                              <span className="message-image-placeholder">
+                                <Image className="w-5 h-5" />
+                              </span>
+                            )}
+                            <span>{image.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })
         )}
       </div>
+
+      {previewImage && (
+        <div
+          className="image-preview-overlay"
+          onClick={() => setPreviewImage(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="image-preview-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="image-preview-header">
+              <div className="image-preview-title">{previewImage.image.name}</div>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => setPreviewImage(null)}
+                aria-label="Close image preview"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <img src={previewImage.dataUrl} alt={previewImage.image.name} />
+          </div>
+        </div>
+      )}
 
       {/* New messages indicator */}
       {hasNewMessages && (
