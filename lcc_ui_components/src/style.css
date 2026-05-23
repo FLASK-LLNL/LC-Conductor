@@ -203,6 +203,13 @@
   background: rgba(255, 255, 255, 0.12);
 }
 
+.attachment-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--lcc-text-primary, #e9d5ff);
+}
+
 .attachment-file-meta {
   min-width: 0;
 }

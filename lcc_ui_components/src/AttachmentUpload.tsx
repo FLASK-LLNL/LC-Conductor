@@ -6,7 +6,7 @@
 //#############################################################################
 
 import React, { useRef, useState } from 'react';
-import { Image, Upload, X } from 'lucide-react';
+import { FileText, Image, Upload, X } from 'lucide-react';
 import type { AgentAttachment } from './types.js';
 
 const DEFAULT_MAX_SIZE_BYTES = 5 * 1024 * 1024;
@@ -36,6 +36,12 @@ const readFileAsDataUrl = (file: File): Promise<string> => {
   });
 };
 
+const inferMimeType = (file: File): string => {
+  if (file.type) return file.type;
+  if (file.name.toLowerCase().endsWith('.pdf')) return 'application/pdf';
+  return '';
+};
+
 export interface AttachmentUploadProps {
   value: AgentAttachment[];
   onChange: (attachments: AgentAttachment[]) => void;
@@ -45,6 +51,8 @@ export interface AttachmentUploadProps {
   maxSizeBytes?: number;
   disabled?: boolean;
   label?: string;
+  emptyLabel?: string;
+  invalidTypeMessage?: string;
 }
 
 export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
@@ -56,6 +64,8 @@ export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
   maxSizeBytes = DEFAULT_MAX_SIZE_BYTES,
   disabled = false,
   label = 'Images',
+  emptyLabel = 'Attach images',
+  invalidTypeMessage = 'Only supported files can be attached.',
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,8 +83,9 @@ export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
     }
 
     for (const file of candidates) {
-      if (!matchesAcceptedMimeType(file.type, acceptedMimeTypes)) {
-        setError('Only image files can be attached.');
+      const mimeType = inferMimeType(file);
+      if (!matchesAcceptedMimeType(mimeType, acceptedMimeTypes)) {
+        setError(invalidTypeMessage);
         continue;
       }
       if (file.size > maxSizeBytes) {
@@ -86,7 +97,7 @@ export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
       next.push({
         id: createId(),
         name: file.name,
-        mimeType: file.type,
+        mimeType,
         sizeBytes: file.size,
         dataUrl,
         createdAt: new Date().toISOString(),
@@ -141,11 +152,17 @@ export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
         <div className="attachment-file-list">
           {value.map((attachment) => (
             <div className="attachment-file-card" key={attachment.id}>
-              <img
-                src={attachment.dataUrl}
-                alt={attachment.name}
-                className="attachment-file-thumbnail"
-              />
+              {attachment.mimeType.startsWith('image/') ? (
+                <img
+                  src={attachment.dataUrl}
+                  alt={attachment.name}
+                  className="attachment-file-thumbnail"
+                />
+              ) : (
+                <div className="attachment-file-thumbnail attachment-file-icon">
+                  <FileText className="w-5 h-5" />
+                </div>
+              )}
               <div className="attachment-file-meta">
                 <div className="attachment-file-name">{attachment.name}</div>
                 <div className="attachment-file-detail">
@@ -173,7 +190,7 @@ export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
           onClick={() => inputRef.current?.click()}
         >
           <Image className="w-5 h-5" />
-          <span>Attach images</span>
+          <span>{emptyLabel}</span>
         </button>
       )}
 
