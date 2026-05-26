@@ -10,6 +10,7 @@ import { FileText, Image, Upload, X } from 'lucide-react';
 import type { AgentAttachment } from './types.js';
 
 const DEFAULT_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+const DEFAULT_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 const createId = (): string => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -58,14 +59,14 @@ export interface AttachmentUploadProps {
 export const AttachmentUpload: React.FC<AttachmentUploadProps> = ({
   value,
   onChange,
-  accept = 'image/*',
-  acceptedMimeTypes = ['image/*'],
+  accept = DEFAULT_IMAGE_MIME_TYPES.join(','),
+  acceptedMimeTypes = DEFAULT_IMAGE_MIME_TYPES,
   maxFiles = 5,
   maxSizeBytes = DEFAULT_MAX_SIZE_BYTES,
   disabled = false,
   label = 'Images',
   emptyLabel = 'Attach images',
-  invalidTypeMessage = 'Only supported files can be attached.',
+  invalidTypeMessage = 'Only JPEG, PNG, GIF, and WebP images can be attached.',
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
