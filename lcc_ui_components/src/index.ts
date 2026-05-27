@@ -15,6 +15,7 @@ export { SettingsButton } from './SettingsButton.js';
 export { ReasoningSidebar, useSidebarState } from './ReasoningSidebar.js';
 export { MarkdownText } from './MarkdownText.js';
 export { AttachmentUpload } from './AttachmentUpload.js';
+export { AgentChatPanel, AgentChatModal, AgentHistoryList } from './AgentChat.js';
 
 // Constants
 export { BACKEND_OPTIONS } from './constants.js';
@@ -48,6 +49,13 @@ export type {
   VisibleSources,
   AgentAttachment,
   AgentImageRef,
+  AgentChatImageRef,
+  AgentChatReasoningItem,
+  AgentChatToolEvent,
+  AgentChatContextItem,
+  AgentChatMessage,
+  AgentChatHistory,
+  AgentHistorySummary,
 
   // Markdown types
   MarkdownTextProps,

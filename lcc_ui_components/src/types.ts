@@ -155,6 +155,58 @@ export interface AgentImageRef {
 }
 
 // ============================================================================
+// Agent Chat Types
+// ============================================================================
+
+export interface AgentChatImageRef extends AgentImageRef {
+  dataUrl?: string;
+}
+
+export interface AgentChatReasoningItem {
+  type: string;
+  text: string;
+  debug?: unknown;
+}
+
+export interface AgentChatToolEvent {
+  type: string;
+  name?: string;
+  text: string;
+  raw?: unknown;
+}
+
+export interface AgentChatContextItem {
+  title: string;
+  text: string;
+}
+
+export interface AgentChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  label?: string;
+  text: string;
+  context?: AgentChatContextItem[];
+  images?: AgentChatImageRef[];
+  reasoning?: AgentChatReasoningItem[];
+  toolEvents?: AgentChatToolEvent[];
+  raw?: unknown;
+}
+
+export interface AgentChatHistory {
+  agentKey: string;
+  title: string;
+  subtitle?: string;
+  metadata?: Record<string, unknown>;
+  modelInfo?: Record<string, unknown>;
+  promptContext?: AgentChatContextItem[];
+  messages: AgentChatMessage[];
+  lastMessage?: string;
+  rawSession?: unknown;
+}
+
+export type AgentHistorySummary = AgentChatHistory;
+
+// ============================================================================
 // Markdown Types
 // ============================================================================
 
