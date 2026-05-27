@@ -64,12 +64,9 @@ const AgentContextUsageStatus: React.FC<{
       ? usage.maxTokens
       : undefined;
   const maxTokens = providedMaxTokens ?? contextWindowForModel(usage?.model);
-  const percent =
-    typeof usage?.percentUsed === 'number' && Number.isFinite(usage.percentUsed)
-      ? Math.max(0, Math.min(100, usage.percentUsed))
-      : maxTokens
-        ? Math.max(0, Math.min(100, (usedTokens / maxTokens) * 100))
-        : undefined;
+  const percent = maxTokens
+    ? Math.max(0, Math.min(100, (usedTokens / maxTokens) * 100))
+    : undefined;
   const titleParts = [
     `${usedTokens.toLocaleString()} tokens used`,
     maxTokens ? `${maxTokens.toLocaleString()} token context` : undefined,
