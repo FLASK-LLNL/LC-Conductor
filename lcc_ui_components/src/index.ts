@@ -19,6 +19,7 @@ export { AgentChatPanel, AgentChatModal, AgentHistoryList } from './AgentChat.js
 
 // Constants
 export { BACKEND_OPTIONS } from './constants.js';
+export { MODEL_CONTEXT_WINDOWS, contextWindowForModel } from './modelContext.js';
 export {
   callLocalMcpTool,
   checkLocalMcpServerConnectivity,
@@ -53,6 +54,7 @@ export type {
   AgentChatReasoningItem,
   AgentChatToolEvent,
   AgentChatContextItem,
+  AgentChatContextUsage,
   AgentChatMessage,
   AgentChatHistory,
   AgentHistorySummary,

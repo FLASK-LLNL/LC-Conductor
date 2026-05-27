@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Bug, Image, MessageSquare, Send, X } from 'lucide-react';
 import { AttachmentUpload } from './AttachmentUpload.js';
 import { MarkdownText } from './MarkdownText.js';
+import { contextWindowForModel } from './modelContext.js';
 import type {
   AgentAttachment,
   AgentChatHistory,
@@ -30,6 +31,224 @@ const roleLabel = (message: AgentChatMessage): string => {
   return 'System';
 };
 
+const formatPercent = (value: number): string => {
+  if (value < 1 && value > 0) return `${value.toFixed(2).replace(/0$/, '')}%`;
+  return `${Math.round(value)}%`;
+};
+
+const formatTokenCount = (value: number): string => {
+  if (!Number.isFinite(value)) return '0';
+  if (value >= 1_000_000) {
+    const formatted = (value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1);
+    return `${formatted.replace(/\.0$/, '')}M`;
+  }
+  if (value >= 1_000) {
+    const formatted = (value / 1_000).toFixed(value >= 10_000 ? 0 : 1);
+    return `${formatted.replace(/\.0$/, '')}K`;
+  }
+  return value.toLocaleString();
+};
+
+const AgentContextUsageStatus: React.FC<{
+  history: AgentChatHistory | null;
+  compact?: boolean;
+}> = React.memo(function AgentContextUsageStatus({ history, compact = false }) {
+  const usage = history?.contextUsage;
+  const usedTokens = usage?.usedTokens;
+  if (typeof usedTokens !== 'number' || !Number.isFinite(usedTokens)) {
+    return null;
+  }
+
+  const providedMaxTokens =
+    typeof usage?.maxTokens === 'number' && Number.isFinite(usage.maxTokens)
+      ? usage.maxTokens
+      : undefined;
+  const maxTokens = providedMaxTokens ?? contextWindowForModel(usage?.model);
+  const percent =
+    typeof usage?.percentUsed === 'number' && Number.isFinite(usage.percentUsed)
+      ? Math.max(0, Math.min(100, usage.percentUsed))
+      : maxTokens
+        ? Math.max(0, Math.min(100, (usedTokens / maxTokens) * 100))
+        : undefined;
+  const titleParts = [
+    `${usedTokens.toLocaleString()} tokens used`,
+    maxTokens ? `${maxTokens.toLocaleString()} token context` : undefined,
+    usage?.model,
+    usage?.estimated ? 'estimated (as 0.25 * text length)' : undefined,
+  ].filter(Boolean);
+  const statusClassName = `agent-context-status${compact ? ' agent-context-status-compact' : ''}`;
+  const usageLabel =
+    maxTokens !== undefined
+      ? `${formatTokenCount(usedTokens)}/${formatTokenCount(maxTokens)}`
+      : `${formatTokenCount(usedTokens)} tokens`;
+
+  if (percent === undefined) {
+    return (
+      <div className={statusClassName} title={titleParts.join(' | ')}>
+        <span className="agent-context-percent">Context used: {usageLabel}</span>
+      </div>
+    );
+  }
+
+  const meterPercent = percent;
+  const meterStyle = {
+    '--agent-context-percent': `${meterPercent}%`,
+  } as React.CSSProperties;
+
+  return (
+    <div className={statusClassName} title={titleParts.join(' | ')}>
+      <span className="agent-context-meter" style={meterStyle} aria-hidden="true">
+        <span />
+      </span>
+      <span className="agent-context-percent">Context used: {formatPercent(percent)}</span>
+    </div>
+  );
+});
+
+interface LazyDetailsProps {
+  className?: string;
+  summary: React.ReactNode;
+  renderContent: () => React.ReactNode;
+}
+
+const LazyDetails: React.FC<LazyDetailsProps> = ({ className, summary, renderContent }) => {
+  const [hasOpened, setHasOpened] = useState(false);
+
+  return (
+    <details
+      className={className}
+      onToggle={(event) => {
+        if (event.currentTarget.open) {
+          setHasOpened(true);
+        }
+      }}
+    >
+      <summary>{summary}</summary>
+      {hasOpened ? renderContent() : null}
+    </details>
+  );
+};
+
+const AgentPromptContextDetails: React.FC<{
+  promptContext?: AgentChatHistory['promptContext'];
+}> = React.memo(function AgentPromptContextDetails({ promptContext }) {
+  return (
+    <LazyDetails
+      className="agent-chat-prompt-context"
+      summary="Prompt context"
+      renderContent={() =>
+        promptContext && promptContext.length > 0 ? (
+          promptContext.map((item, index) => (
+            <div key={`history-context-${index}`} className="agent-chat-detail">
+              <div className="agent-chat-detail-title">{item.title}</div>
+              <MarkdownText text={item.text} collapsibleCodeBlocks />
+            </div>
+          ))
+        ) : (
+          <div className="agent-chat-detail agent-chat-detail-muted">
+            Prompt context not available
+          </div>
+        )
+      }
+    />
+  );
+});
+
+interface AgentChatMessageRowProps {
+  message: AgentChatMessage;
+  debug: boolean;
+  resolveImageDataUrl?: (imageId: string) => string | undefined;
+}
+
+const AgentChatMessageRow: React.FC<AgentChatMessageRowProps> = React.memo(
+  function AgentChatMessageRow({ message, debug, resolveImageDataUrl }) {
+    return (
+      <div className={`agent-chat-row agent-chat-row-${message.role}`}>
+        <div className="agent-chat-speaker">{roleLabel(message)}</div>
+        <div className={`agent-chat-bubble agent-chat-bubble-${message.role}`}>
+          {message.text && <MarkdownText text={message.text} collapsibleCodeBlocks />}
+
+          {message.context && message.context.length > 0 && (
+            <LazyDetails
+              className="agent-chat-details"
+              summary="Prompt context"
+              renderContent={() =>
+                message.context?.map((item, index) => (
+                  <div key={`${message.id}-context-${index}`} className="agent-chat-detail">
+                    <div className="agent-chat-detail-title">{item.title}</div>
+                    <MarkdownText text={item.text} collapsibleCodeBlocks />
+                  </div>
+                ))
+              }
+            />
+          )}
+
+          {message.images && message.images.length > 0 && (
+            <div className="agent-chat-images">
+              {message.images.map((image) => {
+                const src = imageDataUrl(image, resolveImageDataUrl);
+                return (
+                  <button
+                    key={image.id}
+                    type="button"
+                    className="agent-chat-image"
+                    disabled={!src}
+                    title={image.name}
+                  >
+                    {src ? <img src={src} alt={image.name} /> : <Image className="w-5 h-5" />}
+                    <span>{image.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {message.reasoning && message.reasoning.length > 0 && (
+            <LazyDetails
+              className="agent-chat-details"
+              summary={`Reasoning (${message.reasoning.length})`}
+              renderContent={() =>
+                message.reasoning?.map((item, index) => (
+                  <div key={`${message.id}-reasoning-${index}`} className="agent-chat-detail">
+                    <MarkdownText text={item.text || '(empty reasoning item)'} />
+                    {debug && item.debug !== undefined && (
+                      <pre>{JSON.stringify(item.debug, null, 2)}</pre>
+                    )}
+                  </div>
+                ))
+              }
+            />
+          )}
+
+          {message.toolEvents && message.toolEvents.length > 0 && (
+            <LazyDetails
+              className="agent-chat-details"
+              summary={`Tool events (${message.toolEvents.length})`}
+              renderContent={() =>
+                message.toolEvents?.map((event, index) => (
+                  <pre key={`${message.id}-tool-${index}`} className="agent-chat-detail">
+                    {event.text}
+                  </pre>
+                ))
+              }
+            />
+          )}
+
+          {debug && message.raw !== undefined && (
+            <LazyDetails
+              className="agent-chat-details"
+              summary="Raw message"
+              renderContent={() => (
+                <pre className="agent-chat-detail">{JSON.stringify(message.raw, null, 2)}</pre>
+              )}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+);
+
 export interface AgentChatPanelProps {
   history: AgentChatHistory | null;
   debug: boolean;
@@ -40,7 +259,7 @@ export interface AgentChatPanelProps {
   resolveImageDataUrl?: (imageId: string) => string | undefined;
 }
 
-export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
+export const AgentChatPanel: React.FC<AgentChatPanelProps> = React.memo(function AgentChatPanel({
   history,
   debug,
   pending = false,
@@ -48,7 +267,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   onDebugChange,
   onSend,
   resolveImageDataUrl,
-}) => {
+}: AgentChatPanelProps) {
   const [query, setQuery] = useState('');
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -71,6 +290,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   return (
     <div className="agent-chat-panel">
       <div className="agent-chat-toolbar">
+        <AgentContextUsageStatus history={history} />
         <label className="agent-chat-debug-toggle">
           <input
             type="checkbox"
@@ -83,21 +303,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         </label>
       </div>
 
-      <details className="agent-chat-prompt-context">
-        <summary>Prompt context</summary>
-        {history?.promptContext && history.promptContext.length > 0 ? (
-          history.promptContext.map((item, index) => (
-            <div key={`history-context-${index}`} className="agent-chat-detail">
-              <div className="agent-chat-detail-title">{item.title}</div>
-              <MarkdownText text={item.text} collapsibleCodeBlocks />
-            </div>
-          ))
-        ) : (
-          <div className="agent-chat-detail agent-chat-detail-muted">
-            Prompt context not available
-          </div>
-        )}
-      </details>
+      <AgentPromptContextDetails promptContext={history?.promptContext} />
 
       <div className="agent-chat-messages custom-scrollbar" ref={scrollRef}>
         {!history || history.messages.length === 0 ? (
@@ -107,76 +313,12 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           </div>
         ) : (
           history.messages.map((message) => (
-            <div key={message.id} className={`agent-chat-row agent-chat-row-${message.role}`}>
-              <div className="agent-chat-speaker">{roleLabel(message)}</div>
-              <div className={`agent-chat-bubble agent-chat-bubble-${message.role}`}>
-                {message.text && <MarkdownText text={message.text} collapsibleCodeBlocks />}
-
-                {message.context && message.context.length > 0 && (
-                  <details className="agent-chat-details">
-                    <summary>Prompt context</summary>
-                    {message.context.map((item, index) => (
-                      <div key={`${message.id}-context-${index}`} className="agent-chat-detail">
-                        <div className="agent-chat-detail-title">{item.title}</div>
-                        <MarkdownText text={item.text} collapsibleCodeBlocks />
-                      </div>
-                    ))}
-                  </details>
-                )}
-
-                {message.images && message.images.length > 0 && (
-                  <div className="agent-chat-images">
-                    {message.images.map((image) => {
-                      const src = imageDataUrl(image, resolveImageDataUrl);
-                      return (
-                        <button
-                          key={image.id}
-                          type="button"
-                          className="agent-chat-image"
-                          disabled={!src}
-                          title={image.name}
-                        >
-                          {src ? <img src={src} alt={image.name} /> : <Image className="w-5 h-5" />}
-                          <span>{image.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {message.reasoning && message.reasoning.length > 0 && (
-                  <details className="agent-chat-details">
-                    <summary>Reasoning ({message.reasoning.length})</summary>
-                    {message.reasoning.map((item, index) => (
-                      <div key={`${message.id}-reasoning-${index}`} className="agent-chat-detail">
-                        <MarkdownText text={item.text || '(empty reasoning item)'} />
-                        {debug && item.debug !== undefined && (
-                          <pre>{JSON.stringify(item.debug, null, 2)}</pre>
-                        )}
-                      </div>
-                    ))}
-                  </details>
-                )}
-
-                {message.toolEvents && message.toolEvents.length > 0 && (
-                  <details className="agent-chat-details">
-                    <summary>Tool events ({message.toolEvents.length})</summary>
-                    {message.toolEvents.map((event, index) => (
-                      <pre key={`${message.id}-tool-${index}`} className="agent-chat-detail">
-                        {event.text}
-                      </pre>
-                    ))}
-                  </details>
-                )}
-
-                {debug && message.raw !== undefined && (
-                  <details className="agent-chat-details">
-                    <summary>Raw message</summary>
-                    <pre className="agent-chat-detail">{JSON.stringify(message.raw, null, 2)}</pre>
-                  </details>
-                )}
-              </div>
-            </div>
+            <AgentChatMessageRow
+              key={message.id}
+              message={message}
+              debug={debug}
+              resolveImageDataUrl={resolveImageDataUrl}
+            />
           ))
         )}
         {pending && <div className="agent-chat-pending">Waiting for agent response...</div>}
@@ -215,7 +357,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       )}
     </div>
   );
-};
+});
 
 export interface AgentChatModalProps extends AgentChatPanelProps {
   isOpen: boolean;
@@ -269,6 +411,7 @@ export const AgentHistoryList: React.FC<AgentHistoryListProps> = ({ histories, o
         >
           <div className="agent-history-title">{history.title || history.agentKey}</div>
           {history.subtitle && <div className="agent-history-subtitle">{history.subtitle}</div>}
+          <AgentContextUsageStatus history={history} compact />
           {history.lastMessage && (
             <div className="agent-history-preview">{history.lastMessage}</div>
           )}

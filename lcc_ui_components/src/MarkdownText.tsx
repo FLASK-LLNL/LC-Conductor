@@ -13,6 +13,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { MarkdownTextProps } from './types.js';
 
 const DEFAULT_CODE_BLOCK_COLLAPSE_THRESHOLD = 8;
+const REMARK_PLUGINS = [remarkGfm];
 
 interface CodeBlockProps {
   code: string;
@@ -137,13 +138,13 @@ const createMarkdownComponents = (
  * <MarkdownText text="# Hello\n\nThis is **bold** text." />
  * ```
  */
-export const MarkdownText: React.FC<MarkdownTextProps> = ({
+export const MarkdownText: React.FC<MarkdownTextProps> = React.memo(function MarkdownText({
   text,
   className,
   collapsibleCodeBlocks = false,
   defaultCollapsedCodeBlocks = true,
   codeBlockCollapseThreshold = DEFAULT_CODE_BLOCK_COLLAPSE_THRESHOLD,
-}) => {
+}: MarkdownTextProps) {
   const markdownComponents = React.useMemo(
     () =>
       createMarkdownComponents(
@@ -156,9 +157,9 @@ export const MarkdownText: React.FC<MarkdownTextProps> = ({
 
   return (
     <div className={`markdown-content space-y-2 ${className || ''}`.trim()}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={markdownComponents}>
         {text}
       </ReactMarkdown>
     </div>
   );
-};
+});

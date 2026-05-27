@@ -180,6 +180,15 @@ export interface AgentChatContextItem {
   text: string;
 }
 
+export interface AgentChatContextUsage {
+  usedTokens: number;
+  maxTokens?: number;
+  estimated?: boolean;
+  model?: string;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
 export interface AgentChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -198,6 +207,7 @@ export interface AgentChatHistory {
   subtitle?: string;
   metadata?: Record<string, unknown>;
   modelInfo?: Record<string, unknown>;
+  contextUsage?: AgentChatContextUsage;
   promptContext?: AgentChatContextItem[];
   messages: AgentChatMessage[];
   lastMessage?: string;
