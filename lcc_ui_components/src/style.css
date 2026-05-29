@@ -424,9 +424,35 @@
   background: var(--lcc-bg-surface-hover, rgba(255, 255, 255, 0.1));
 }
 
+.agent-history-item-active {
+  border-color: var(--lcc-accent, #a855f7);
+}
+
+.agent-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .agent-history-title {
   font-weight: 600;
   color: var(--lcc-text-secondary, #ddd6fe);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-history-active-badge {
+  flex: 0 0 auto;
+  border: 1px solid var(--lcc-accent, #a855f7);
+  border-radius: 999px;
+  color: var(--lcc-text-primary, #e9d5ff);
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.2rem 0.45rem;
 }
 
 .agent-history-subtitle,

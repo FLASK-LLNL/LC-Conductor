@@ -186,6 +186,7 @@ export interface AgentChatContextUsage {
   estimated?: boolean;
   model?: string;
   outputTokens?: number;
+  reasoningTokens?: number;
   totalTokens?: number;
 }
 

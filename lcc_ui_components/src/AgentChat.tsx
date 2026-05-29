@@ -67,8 +67,15 @@ const AgentContextUsageStatus: React.FC<{
   const percent = maxTokens
     ? Math.max(0, Math.min(100, (usedTokens / maxTokens) * 100))
     : undefined;
+  const reasoningTokens =
+    typeof usage?.reasoningTokens === 'number' && Number.isFinite(usage.reasoningTokens)
+      ? usage.reasoningTokens
+      : undefined;
   const titleParts = [
     `${usedTokens.toLocaleString()} tokens used`,
+    reasoningTokens !== undefined
+      ? `${reasoningTokens.toLocaleString()} reasoning tokens`
+      : undefined,
     maxTokens ? `${maxTokens.toLocaleString()} token context` : undefined,
     usage?.model,
     usage?.estimated ? 'estimated (as 0.25 * text length)' : undefined,
@@ -250,6 +257,7 @@ export interface AgentChatPanelProps {
   history: AgentChatHistory | null;
   debug: boolean;
   pending?: boolean;
+  sendDisabled?: boolean;
   readOnly?: boolean;
   onDebugChange: (debug: boolean) => void;
   onSend?: (query: string, attachments: AgentAttachment[]) => void;
@@ -260,6 +268,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = React.memo(function
   history,
   debug,
   pending = false,
+  sendDisabled = false,
   readOnly = false,
   onDebugChange,
   onSend,
@@ -278,7 +287,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = React.memo(function
 
   const submit = (): void => {
     const trimmed = query.trim();
-    if (!trimmed || !onSend || pending) return;
+    if (!trimmed || !onSend || pending || sendDisabled) return;
     onSend(trimmed, attachments);
     setQuery('');
     setAttachments([]);
@@ -331,7 +340,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = React.memo(function
                 submit();
               }
             }}
-            disabled={pending}
+            disabled={pending || sendDisabled}
             className="form-textarea agent-chat-input"
             placeholder="Message this agent..."
           />
@@ -344,7 +353,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = React.memo(function
           <button
             type="button"
             onClick={submit}
-            disabled={!query.trim() || pending}
+            disabled={!query.trim() || pending || sendDisabled}
             className="btn btn-primary agent-chat-send"
           >
             <Send className="w-4 h-4" />
@@ -389,31 +398,44 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
 
 export interface AgentHistoryListProps {
   histories: AgentChatHistory[];
+  activeAgentKeys?: string[];
   onSelect: (agentKey: string) => void;
 }
 
-export const AgentHistoryList: React.FC<AgentHistoryListProps> = ({ histories, onSelect }) => {
+export const AgentHistoryList: React.FC<AgentHistoryListProps> = ({
+  histories,
+  activeAgentKeys = [],
+  onSelect,
+}) => {
   if (histories.length === 0) {
     return <div className="agent-history-empty">No agent histories in this experiment</div>;
   }
 
+  const activeAgentKeySet = new Set(activeAgentKeys);
+
   return (
     <div className="agent-history-list">
-      {histories.map((history) => (
-        <button
-          type="button"
-          key={history.agentKey}
-          className="agent-history-item"
-          onClick={() => onSelect(history.agentKey)}
-        >
-          <div className="agent-history-title">{history.title || history.agentKey}</div>
-          {history.subtitle && <div className="agent-history-subtitle">{history.subtitle}</div>}
-          <AgentContextUsageStatus history={history} compact />
-          {history.lastMessage && (
-            <div className="agent-history-preview">{history.lastMessage}</div>
-          )}
-        </button>
-      ))}
+      {histories.map((history) => {
+        const isActive = activeAgentKeySet.has(history.agentKey);
+        return (
+          <button
+            type="button"
+            key={history.agentKey}
+            className={`agent-history-item${isActive ? ' agent-history-item-active' : ''}`}
+            onClick={() => onSelect(history.agentKey)}
+          >
+            <div className="agent-history-heading">
+              <div className="agent-history-title">{history.title || history.agentKey}</div>
+              {isActive && <span className="agent-history-active-badge">Active</span>}
+            </div>
+            {history.subtitle && <div className="agent-history-subtitle">{history.subtitle}</div>}
+            <AgentContextUsageStatus history={history} compact />
+            {history.lastMessage && (
+              <div className="agent-history-preview">{history.lastMessage}</div>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 };
