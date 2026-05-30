@@ -55,6 +55,18 @@ export interface BackendOption {
   models: string[];
 }
 
+export interface DiscoverModelsRequest {
+  backend: string;
+  base_url?: string;
+  api_key?: string;
+}
+
+export interface DiscoverModelsResponse {
+  backend: string;
+  models: string[];
+  source: 'discovered' | 'default';
+}
+
 export interface MoleculeNameOption {
   value: string;
   label: string;

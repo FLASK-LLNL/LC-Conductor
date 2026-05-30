@@ -35,6 +35,15 @@ from lc_conductor.tooling import (
     resolve_builtin_tool_descriptors,
     resolve_builtin_tools,
 )
+from lc_conductor.endpoint_discovery import (
+    discover_models_for_backend,
+    discover_models_with_fallback,
+    get_default_models_for_backend,
+    validate_initial_model,
+    discover_models_endpoint,
+    DiscoverModelsRequest,
+    DiscoverModelsResponse,
+)
 
 __all__ = [
     "ActionManager",
@@ -62,4 +71,11 @@ __all__ = [
     "doc_summary",
     "resolve_builtin_tool_descriptors",
     "resolve_builtin_tools",
+    "discover_models_for_backend",
+    "discover_models_with_fallback",
+    "get_default_models_for_backend",
+    "validate_initial_model",
+    "discover_models_endpoint",
+    "DiscoverModelsRequest",
+    "DiscoverModelsResponse",
 ]
