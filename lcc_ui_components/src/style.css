@@ -131,6 +131,29 @@
   color: var(--lcc-text-primary, #e9d5ff) !important;
 }
 
+.reasoning-copy-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+}
+
+.reasoning-copy-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.reasoning-copy-button-copied {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.reasoning-copy-button-error {
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.18);
+}
+
 /* Optional: Add any other component-specific styles here */
 
 /* ========================================

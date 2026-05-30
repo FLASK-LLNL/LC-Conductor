@@ -5,8 +5,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //#############################################################################
 
-import React, { useRef, useEffect, useState } from 'react';
-import { X, Brain, Image } from 'lucide-react';
+import React, { useRef, useEffect, useMemo, useState } from 'react';
+import { X, Brain, Image, Copy, Check, AlertCircle } from 'lucide-react';
 import { MarkdownText } from './MarkdownText.js';
 import type {
   AgentImageRef,
@@ -19,6 +19,88 @@ import './style.css';
 
 const getMessageId = (msg: SidebarMessage, idx: number): string =>
   msg.id ? String(msg.id) : `${msg.timestamp}-${idx}`;
+
+const formatTimestamp = (timestamp: string): string => {
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+
+  return date.toLocaleString();
+};
+
+const formatReasoningMessagesForClipboard = (
+  messages: SidebarMessage[],
+  visibleSources: VisibleSources
+): string => {
+  const enabledSources = Object.entries(visibleSources)
+    .filter(([, isVisible]) => isVisible)
+    .map(([source]) => source);
+
+  const filters = enabledSources.length > 0 ? enabledSources.join(', ') : 'None';
+  const header = [
+    'Reasoning Sidebar',
+    `Copied: ${new Date().toLocaleString()}`,
+    `Filters: ${filters}`,
+    `Messages: ${messages.length}`,
+  ].join('\n');
+
+  if (messages.length === 0) {
+    return `${header}\n\nNo messages match the selected filters.`;
+  }
+
+  const formattedMessages = messages.map((msg, idx) => {
+    const lines = [
+      `## ${idx + 1}. ${msg.source}`,
+      `Time: ${formatTimestamp(msg.timestamp)}`,
+      '',
+      msg.message.trim(),
+    ];
+
+    if (msg.smiles) {
+      lines.push('', `SMILES: ${msg.smiles}`);
+    }
+
+    if (msg.images && Object.keys(msg.images).length > 0) {
+      const imageNames = Object.values(msg.images)
+        .map((image) => image.name)
+        .filter(Boolean);
+
+      if (imageNames.length > 0) {
+        lines.push('', `Images: ${imageNames.join(', ')}`);
+      }
+    }
+
+    return lines.join('\n');
+  });
+
+  return `${header}\n\n${formattedMessages.join('\n\n---\n\n')}`;
+};
+
+const copyTextToClipboard = async (text: string): Promise<void> => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  textarea.style.pointerEvents = 'none';
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('Copy command was rejected');
+    }
+  } finally {
+    document.body.removeChild(textarea);
+  }
+};
 
 /**
  * Custom hook for managing sidebar state
@@ -106,6 +188,7 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const animatedMessagesRef = useRef<Set<string>>(new Set());
   const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [previewImage, setPreviewImage] = useState<{
@@ -114,11 +197,25 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
   } | null>(null);
   const prevMessageCountRef = useRef(messages.length);
   const programmaticScrollUntilRef = useRef<number>(0);
+  const copyStatusTimeoutRef = useRef<number | null>(null);
+
+  const filteredMessages = useMemo(
+    () => messages.filter((msg) => visibleSources[msg.source]),
+    [messages, visibleSources]
+  );
 
   // Save width to localStorage when it changes
   useEffect(() => {
     localStorage.setItem(storageKey, sidebarWidth.toString());
   }, [sidebarWidth, storageKey]);
+
+  useEffect(() => {
+    return () => {
+      if (copyStatusTimeoutRef.current !== null) {
+        window.clearTimeout(copyStatusTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Check if scrolled to bottom
   const checkIfAtBottom = () => {
@@ -257,6 +354,23 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
     }
   };
 
+  const handleCopyFilteredMessages = async () => {
+    try {
+      await copyTextToClipboard(
+        formatReasoningMessagesForClipboard(filteredMessages, visibleSources)
+      );
+      setCopyStatus('copied');
+    } catch (err) {
+      console.error('Failed to copy reasoning sidebar contents:', err);
+      setCopyStatus('error');
+    }
+
+    if (copyStatusTimeoutRef.current !== null) {
+      window.clearTimeout(copyStatusTimeoutRef.current);
+    }
+    copyStatusTimeoutRef.current = window.setTimeout(() => setCopyStatus('idle'), 2000);
+  };
+
   if (!isOpen) {
     return (
       <div className="sidebar sidebar-collapsed sidebar-right">
@@ -294,6 +408,22 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
       <div className="card-header">
         <h3 className="heading-3">Reasoning</h3>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCopyFilteredMessages}
+            className={`btn-icon reasoning-copy-button reasoning-copy-button-${copyStatus}`}
+            disabled={filteredMessages.length === 0}
+            title={filteredMessages.length === 0 ? 'Nothing to copy' : 'Copy sidebar contents'}
+            aria-label="Copy sidebar contents"
+          >
+            {copyStatus === 'copied' ? (
+              <Check className="w-4 h-4" />
+            ) : copyStatus === 'error' ? (
+              <AlertCircle className="w-4 h-4" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
+          </button>
           <div className="filter-control">
             <button
               onClick={(e) => {
@@ -387,7 +517,7 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
       </div>
 
       <div className="reasoning-messages space-y-3 custom-scrollbar" ref={sidebarRef}>
-        {messages.filter((msg) => visibleSources[msg.source]).length === 0 ? (
+        {filteredMessages.length === 0 ? (
           <div className="empty-state">
             <svg className="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -402,66 +532,64 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
             </p>
           </div>
         ) : (
-          messages
-            .filter((msg) => visibleSources[msg.source])
-            .map((msg, idx) => {
-              const messageId = getMessageId(msg, idx);
-              const isNew = newMessageIds.has(messageId);
+          filteredMessages.map((msg, idx) => {
+            const messageId = getMessageId(msg, idx);
+            const isNew = newMessageIds.has(messageId);
 
-              return (
-                <div
-                  key={messageId}
-                  className={
-                    isNew ? 'message-card message-card-new' : 'message-card message-card-existing'
-                  }
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs text-muted">
-                      {new Date(msg.timestamp).toLocaleTimeString()}
-                    </div>
-                    <div className="badge badge-primary">{msg.source}</div>
+            return (
+              <div
+                key={messageId}
+                className={
+                  isNew ? 'message-card message-card-new' : 'message-card message-card-existing'
+                }
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs text-muted">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
                   </div>
-                  <div className="text-sm text-secondary">
-                    <MarkdownText
-                      text={msg.message}
-                      collapsibleCodeBlocks
-                      defaultCollapsedCodeBlocks
-                    />
-                  </div>
-                  {msg.smiles && renderMolecule && (
-                    <div className="mt-3 bg-white/50 rounded-lg p-2 flex justify-center">
-                      {renderMolecule(msg.smiles)}
-                    </div>
-                  )}
-                  {msg.images && Object.keys(msg.images).length > 0 && (
-                    <div className="message-image-grid">
-                      {Object.values(msg.images).map((image) => {
-                        const dataUrl = resolveImageDataUrl?.(image.id);
-                        return (
-                          <button
-                            type="button"
-                            key={image.id}
-                            className="message-image-thumb"
-                            disabled={!dataUrl}
-                            onClick={() => dataUrl && setPreviewImage({ image, dataUrl })}
-                            title={image.name}
-                          >
-                            {dataUrl ? (
-                              <img src={dataUrl} alt={image.name} />
-                            ) : (
-                              <span className="message-image-placeholder">
-                                <Image className="w-5 h-5" />
-                              </span>
-                            )}
-                            <span>{image.name}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <div className="badge badge-primary">{msg.source}</div>
                 </div>
-              );
-            })
+                <div className="text-sm text-secondary">
+                  <MarkdownText
+                    text={msg.message}
+                    collapsibleCodeBlocks
+                    defaultCollapsedCodeBlocks
+                  />
+                </div>
+                {msg.smiles && renderMolecule && (
+                  <div className="mt-3 bg-white/50 rounded-lg p-2 flex justify-center">
+                    {renderMolecule(msg.smiles)}
+                  </div>
+                )}
+                {msg.images && Object.keys(msg.images).length > 0 && (
+                  <div className="message-image-grid">
+                    {Object.values(msg.images).map((image) => {
+                      const dataUrl = resolveImageDataUrl?.(image.id);
+                      return (
+                        <button
+                          type="button"
+                          key={image.id}
+                          className="message-image-thumb"
+                          disabled={!dataUrl}
+                          onClick={() => dataUrl && setPreviewImage({ image, dataUrl })}
+                          title={image.name}
+                        >
+                          {dataUrl ? (
+                            <img src={dataUrl} alt={image.name} />
+                          ) : (
+                            <span className="message-image-placeholder">
+                              <Image className="w-5 h-5" />
+                            </span>
+                          )}
+                          <span>{image.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 
