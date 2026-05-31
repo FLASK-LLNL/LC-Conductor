@@ -20,6 +20,22 @@ import { BACKEND_OPTIONS } from './constants.js';
 import { checkLocalMcpServerConnectivity } from './localMcp.js';
 import { discoverModels } from './api.js';
 
+// Extend Window interface for APP_CONFIG
+declare global {
+  interface Window {
+    APP_CONFIG?: {
+      WS_SERVER?: string;
+      VERSION?: string;
+      ORCHESTRATOR?: {
+        backend?: string;
+        model?: string;
+        apiKey?: string;
+        baseUrl?: string;
+      };
+    };
+  }
+}
+
 const normalizeToolServers = (settings?: Partial<OrchestratorSettings>): ToolServer[] => {
   const nextServers: ToolServer[] = [];
   const seen = new Set<string>();
@@ -88,9 +104,10 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   // Separate state for API key input (independent of settings)
   const [apiKeyInput, setApiKeyInput] = React.useState(initialSettings?.apiKey || '');
   const [apiKeySaved, setApiKeySaved] = React.useState(true); // Track if current input is saved
+  const [showApiKey, setShowApiKey] = React.useState(false); // Track if API key should be visible
 
-  // Track if we've done initial discovery (to avoid re-discovering on backend echoes)
-  const hasInitializedRef = React.useRef(false);
+  // Track if we've initialized from initialSettings (to avoid overwriting on backend echoes)
+  const hasInitializedFromBackendRef = React.useRef(false);
 
   // Default settings
   const defaultSettings: OrchestratorSettings = normalizeSettings(initialSettings);
@@ -375,62 +392,51 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     [handleTooltipMouseLeave, hoveredServer, pinnedServer, tooltipPosition]
   );
 
-  // Update settings when initialSettings prop changes
+  // Update settings when initialSettings prop changes (only on initial load)
   React.useEffect(() => {
-    if (initialSettings) {
+    if (initialSettings && !hasInitializedFromBackendRef.current) {
       const normalizedSettings = normalizeSettings(initialSettings);
       const backendOption = BACKEND_OPTIONS.find((opt) => opt.value === normalizedSettings.backend);
 
-      // Sync API key input if backend sends one (on initial load only)
-      if (normalizedSettings.apiKey && !hasInitializedRef.current) {
+      // Sync API key input from initial settings (typically from environment or localStorage)
+      if (normalizedSettings.apiKey) {
         setApiKeyInput(normalizedSettings.apiKey);
         setApiKeySaved(true);
       }
 
-      // Only discover models on initial page load, not on backend echoes
-      if (!hasInitializedRef.current) {
-        const discoverAndValidate = async () => {
-          const discoveredModels = await discoverModelsForBackend(
-            normalizedSettings.backend,
-            normalizedSettings.useCustomUrl ? normalizedSettings.customUrl : undefined,
-            normalizedSettings.apiKey || undefined
-          );
+      // Discover models and validate
+      const discoverAndValidate = async () => {
+        const discoveredModels = await discoverModelsForBackend(
+          normalizedSettings.backend,
+          normalizedSettings.useCustomUrl ? normalizedSettings.customUrl : undefined,
+          normalizedSettings.apiKey || undefined
+        );
 
-          // Check if the model is in the discovered list
-          const modelInDiscoveredList = discoveredModels.includes(normalizedSettings.model || '');
-          const modelInHardcodedList = backendOption?.models?.includes(
-            normalizedSettings.model || ''
-          );
+        // Check if the model is in the discovered list
+        const modelInDiscoveredList = discoveredModels.includes(normalizedSettings.model || '');
+        const modelInHardcodedList = backendOption?.models?.includes(
+          normalizedSettings.model || ''
+        );
 
-          const updatedSettings = {
-            ...normalizedSettings,
-            backendLabel: backendOption?.label || normalizedSettings.backendLabel,
-            // If model is not in discovered or hardcoded list, set useCustomModel to true
-            // Unless useCustomModel is explicitly provided in initialSettings
-            useCustomModel:
-              initialSettings.useCustomModel !== undefined
-                ? initialSettings.useCustomModel
-                : !(modelInDiscoveredList || modelInHardcodedList),
-          };
-          setSettings(updatedSettings);
-          setTempSettings(updatedSettings);
-
-          // Mark as initialized so we don't re-discover on backend echoes
-          hasInitializedRef.current = true;
-        };
-
-        discoverAndValidate();
-      } else {
-        // On backend echo, update settings but preserve API key from local state
-        // The backend sends apiKey: "" for security, but we need to keep our local copy
         const updatedSettings = {
           ...normalizedSettings,
-          apiKey: apiKeyInput, // Preserve local API key
+          apiKey: normalizedSettings.apiKey || '',
           backendLabel: backendOption?.label || normalizedSettings.backendLabel,
+          // If model is not in discovered or hardcoded list, set useCustomModel to true
+          // Unless useCustomModel is explicitly provided in initialSettings
+          useCustomModel:
+            initialSettings.useCustomModel !== undefined
+              ? initialSettings.useCustomModel
+              : !(modelInDiscoveredList || modelInHardcodedList),
         };
         setSettings(updatedSettings);
         setTempSettings(updatedSettings);
-      }
+
+        // Mark as initialized so backend echoes don't overwrite user changes
+        hasInitializedFromBackendRef.current = true;
+      };
+
+      discoverAndValidate();
     }
   }, [initialSettings, discoverModelsForBackend]);
 
@@ -452,18 +458,29 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   // Discover models when modal opens or backend/URL changes
   React.useEffect(() => {
     if (isModalOpen && activeTab === 'orchestrator') {
-      // Discover models for the current backend if not cached
-      if (!modelCache[tempSettings.backend]) {
+      const cached = modelCache[tempSettings.backend];
+      const currentApiKey = apiKeyInput || undefined;
+
+      console.log('Modal opened - checking cache:', {
+        backend: tempSettings.backend,
+        hasCache: !!cached,
+        cachedApiKey: cached?.apiKey,
+        currentApiKey,
+        needsDiscovery: !cached || cached.apiKey !== currentApiKey,
+      });
+
+      // Discover models if not cached OR if cached API key doesn't match current one
+      if (!cached || cached.apiKey !== currentApiKey) {
         discoverModelsForBackend(
           tempSettings.backend,
           tempSettings.useCustomUrl ? tempSettings.customUrl : undefined,
-          tempSettings.apiKey || undefined
+          currentApiKey
         );
       }
     }
-    // NOTE: tempSettings.apiKey is intentionally NOT in dependencies
-    // API key changes are handled by handleApiKeyChange with debouncing to prevent
-    // duplicate discoveries and race conditions
+    // NOTE: apiKeyInput is intentionally NOT in dependencies
+    // We check it in the effect body but don't want to re-run on every keystroke
+    // Discovery is explicitly triggered by "Save API Key" button
   }, [
     isModalOpen,
     activeTab,
@@ -783,25 +800,53 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     const currentModel = tempSettings.model;
     const currentBackend = tempSettings.backend;
     const currentBaseUrl = tempSettings.useCustomUrl ? tempSettings.customUrl : undefined;
+    const isClearing = !apiKeyInput; // Check if we're clearing the API key
 
-    // Discover models with the new API key
-    const discoveredModels = await discoverModelsForBackend(
-      currentBackend,
-      currentBaseUrl,
-      apiKeyInput,
-      true // force refresh
-    );
+    try {
+      // Discover models with the new API key (empty string will use env var on backend)
+      const discoveredModels = await discoverModelsForBackend(
+        currentBackend,
+        currentBaseUrl,
+        apiKeyInput || undefined, // Convert empty string to undefined
+        true // force refresh
+      );
 
-    // Update the selected model if current model is not in the newly discovered list
-    if (discoveredModels.length > 0 && !discoveredModels.includes(currentModel)) {
-      setTempSettings((prev) => ({
-        ...prev,
-        model: discoveredModels[0],
-      }));
+      // When clearing API key to use env var, reset to environment's default model
+      if (isClearing && typeof window !== 'undefined' && window.APP_CONFIG?.ORCHESTRATOR?.model) {
+        const envModel = window.APP_CONFIG.ORCHESTRATOR.model;
+        // Use environment model if it's in the discovered list
+        if (discoveredModels.includes(envModel)) {
+          setTempSettings((prev) => ({
+            ...prev,
+            model: envModel,
+          }));
+        } else if (discoveredModels.length > 0) {
+          // Otherwise use first discovered model
+          setTempSettings((prev) => ({
+            ...prev,
+            model: discoveredModels[0],
+          }));
+        }
+      } else {
+        // Update the selected model if current model is not in the newly discovered list
+        if (discoveredModels.length > 0 && !discoveredModels.includes(currentModel)) {
+          setTempSettings((prev) => ({
+            ...prev,
+            model: discoveredModels[0],
+          }));
+        }
+      }
+
+      setApiKeySaved(true);
+      console.log(
+        'API key saved and models discovered:',
+        apiKeyInput ? 'with key' : 'using env var'
+      );
+    } catch (error) {
+      console.error('Error saving API key:', error);
+      // Still mark as saved so user can proceed
+      setApiKeySaved(true);
     }
-
-    setApiKeySaved(true);
-    console.log('API key saved and models discovered');
   };
 
   // Tool Server handlers
@@ -1530,9 +1575,15 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                         {tempSettings.backend === 'gemini' && '(GOOGLE_API_KEY)'}
                       </span>
                     </label>
+                    <p
+                      className="helper-text"
+                      style={{ marginTop: '-0.25rem', marginBottom: '0.5rem' }}
+                    >
+                      Clear and save to use environment variable fallback
+                    </p>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
                       <input
-                        type="password"
+                        type={showApiKey ? 'text' : 'password'}
                         value={apiKeyInput}
                         onChange={(e) => handleApiKeyInputChange(e.target.value)}
                         placeholder="Enter your API key"
@@ -1541,7 +1592,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                       />
                       <button
                         onClick={handleSaveApiKey}
-                        disabled={apiKeySaved || !apiKeyInput}
+                        disabled={apiKeySaved}
                         className="btn btn-secondary btn-sm"
                         style={{
                           whiteSpace: 'nowrap',
@@ -1568,13 +1619,27 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                                 d="M5 13l4 4L19 7"
                               />
                             </svg>
-                            Saved
+                            {apiKeyInput ? 'Saved' : 'Using Env'}
                           </>
-                        ) : (
+                        ) : apiKeyInput ? (
                           'Save API Key'
+                        ) : (
+                          'Clear API Key'
                         )}
                       </button>
                     </div>
+                    <label
+                      className="form-label flex items-center gap-2 cursor-pointer"
+                      style={{ marginTop: '0.5rem', marginBottom: 0 }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={showApiKey}
+                        onChange={(e) => setShowApiKey(e.target.checked)}
+                        className="form-checkbox"
+                      />
+                      <span className="text-sm">Show API key</span>
+                    </label>
                   </div>
                 </div>
               )}

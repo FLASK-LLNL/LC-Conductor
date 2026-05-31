@@ -43,7 +43,7 @@ export interface OrchestratorSettings {
   model: string;
   reasoningEffort: ReasoningEffort;
   useCustomModel?: boolean;
-  apiKey: string;
+  apiKey?: string;
   backendLabel: string;
   toolServers?: ToolServer[];
 }
