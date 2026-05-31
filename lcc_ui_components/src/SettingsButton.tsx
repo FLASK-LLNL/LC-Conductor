@@ -729,27 +729,30 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     const backendOption = BACKEND_OPTIONS.find((opt) => opt.value === tempSettings.backend);
     const cached = backendCache[tempSettings.backend];
 
+    // Get available models (discovered or hardcoded)
+    const availableModels = getModelsForBackend(tempSettings.backend);
+
     let modelToUse: string;
 
     if (enabled) {
       // When enabling custom model, keep current model
       modelToUse = tempSettings.model;
     } else {
-      // When disabling custom model, find a valid preset model
-      // First check if cached model is in the preset list
-      const cachedModelInList = cached?.model && backendOption?.models?.includes(cached.model);
-      // Then check if current temp model is in the preset list
-      const tempModelInList = backendOption?.models?.includes(tempSettings.model);
+      // When disabling custom model, find a valid available model
+      // First check if cached model is in the available list
+      const cachedModelInList = cached?.model && availableModels.includes(cached.model);
+      // Then check if current temp model is in the available list
+      const tempModelInList = availableModels.includes(tempSettings.model);
 
       if (cachedModelInList) {
-        // Use cached model if it's a valid preset
+        // Use cached model if it's valid
         modelToUse = cached.model;
       } else if (tempModelInList) {
-        // Use current temp model if it's a valid preset
+        // Use current temp model if it's valid
         modelToUse = tempSettings.model;
       } else {
-        // Fall back to first model in the preset list
-        modelToUse = backendOption?.models?.[0] || tempSettings.model;
+        // Fall back to first available model (discovered or hardcoded)
+        modelToUse = availableModels[0] || tempSettings.model;
       }
     }
 
