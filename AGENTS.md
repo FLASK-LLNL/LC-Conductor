@@ -6,6 +6,14 @@ LC-Conductor is a submodule used by FLASK Copilot for backend orchestration help
 
 The reusable UI library is in `lcc_ui_components/`. Source files are under `lcc_ui_components/src/`, with Vite build output in `lcc_ui_components/dist/`. The parent frontend consumes this package through a local file dependency.
 
+## Reuse-First Development
+
+Before adding code, inspect `ARCHITECTURE.md` and search for existing managers, tool models, MCP helpers, React components, and tests. Extend `ActionManager`, `TaskManager`, `tooling.py`, or existing UI exports when those abstractions fit; avoid creating parallel orchestration or tool-selection paths.
+
+## Local Skills
+
+Shared Codex skills live in `.codex/skills/`. To enable them locally, symlink or copy each skill directory into `$CODEX_HOME/skills` or `~/.codex/skills`; agents should still follow the reuse-first guidance here even when the skill is not installed.
+
 ## Build, Test, and Development Commands
 
 - `pip install -e ".[test]"`: install LC-Conductor with test dependencies.
