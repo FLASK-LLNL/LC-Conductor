@@ -6,6 +6,7 @@
 ###############################################################################
 
 from lc_conductor.backend_manager import ActionManager, TaskManager
+from lc_conductor.agents import AgentRecord, AgentRequest
 from lc_conductor.callback_logger import CallbackLogger
 from lc_conductor.tool_registration import (
     ToolList,
@@ -48,6 +49,8 @@ from lc_conductor.endpoint_discovery import (
 __all__ = [
     "ActionManager",
     "TaskManager",
+    "AgentRecord",
+    "AgentRequest",
     "CallbackLogger",
     "ToolList",
     "list_server_urls",

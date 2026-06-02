@@ -24,6 +24,13 @@ from lc_conductor.tool_registration import (
     extract_bearer_token_from_headers,
 )
 from lc_conductor.backend_helper_function import RunSettings
+from lc_conductor.agents import (
+    AgentRecord,
+    AgentRequest,
+    AgentResponse,
+    ExperimentAgentRecords,
+    ListAgentsResponse,
+)
 from lc_conductor.local_mcp_proxy import (
     attach_local_mcp_tools,
     cancel_pending_local_mcp_requests,
@@ -203,6 +210,41 @@ class ActionManager:
             logger.debug("No experiment context provided for loading state")
             return
         self.experiment.load_state(experiment_context)
+
+    def agent_records(self) -> dict[str, AgentRecord]:
+        experiment_state = ExperimentAgentRecords.model_validate(
+            self.experiment.save_state()
+        )
+        return experiment_state.agentSessions
+
+    async def send_agent_update(self, agent_key: str, *, debug: bool = False) -> None:
+        del debug
+        record = self.agent_records().get(agent_key)
+        if record is None:
+            return
+        await self.websocket.send_json(
+            AgentResponse(agent=record).model_dump(exclude_none=True)
+        )
+
+    async def handle_list_agents(self, data: object) -> None:
+        del data
+        records = self.agent_records()
+        await self.websocket.send_json(
+            ListAgentsResponse(agents=list(records.values())).model_dump(
+                exclude_none=True
+            )
+        )
+
+    async def handle_get_agent(self, data: object) -> None:
+        request = AgentRequest.model_validate(data)
+        record = self.agent_records().get(request.agentKey) or AgentRecord(
+            agentKey=request.agentKey,
+            memory="",
+            modelInfo={},
+        )
+        await self.websocket.send_json(
+            AgentResponse(agent=record).model_dump(exclude_none=True)
+        )
 
     async def _send_processing_message(
         self, message: str, source: str | None = None, **kwargs

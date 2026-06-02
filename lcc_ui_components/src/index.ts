@@ -16,6 +16,7 @@ export { ReasoningSidebar, useSidebarState } from './ReasoningSidebar.js';
 export { MarkdownText } from './MarkdownText.js';
 export { AttachmentUpload } from './AttachmentUpload.js';
 export { AgentChatPanel, AgentChatModal, AgentHistoryList } from './AgentChat.js';
+export { deserializeAgentChatHistory } from './agentSerialization.js';
 
 // Constants
 export { BACKEND_OPTIONS } from './constants.js';
@@ -58,6 +59,9 @@ export type {
   AgentChatMessage,
   AgentChatHistory,
   AgentHistorySummary,
+  SerializedAgentRuntimeConfig,
+  SerializedAgentTask,
+  SerializedAgent,
 
   // Markdown types
   MarkdownTextProps,

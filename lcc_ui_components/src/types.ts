@@ -184,7 +184,9 @@ export interface AgentChatContextUsage {
   usedTokens: number;
   maxTokens?: number;
   estimated?: boolean;
+  source?: 'provider' | 'estimate';
   model?: string;
+  inputTokens?: number;
   outputTokens?: number;
   reasoningTokens?: number;
   totalTokens?: number;
@@ -216,6 +218,25 @@ export interface AgentChatHistory {
 }
 
 export type AgentHistorySummary = AgentChatHistory;
+
+export interface SerializedAgentRuntimeConfig {
+  agentKey: string;
+  backend?: string;
+  model?: string;
+}
+
+export interface SerializedAgentTask {
+  system_prompt?: string;
+  user_prompt?: string;
+}
+
+export interface SerializedAgent {
+  agentKey: string;
+  runtimeConfig?: SerializedAgentRuntimeConfig;
+  memory?: string;
+  modelInfo?: Record<string, unknown>;
+  task?: SerializedAgentTask | null;
+}
 
 // ============================================================================
 // Markdown Types
