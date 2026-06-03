@@ -9,22 +9,96 @@
 Endpoint discovery functionality for LC-Conductor.
 
 This module provides functions to discover available models from OpenAI-compatible
-API endpoints, using the ChARGe openai_base module.
+API endpoints.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from loguru import logger
 from pydantic import BaseModel
+import requests
+import os
 
-try:
-    from charge.clients.openai_base import discover_available_models, get_model_ids
-except ImportError:
-    logger.warning(
-        "Failed to import model discovery functions from charge.clients.openai_base. "
-        "Model discovery will not be available."
-    )
-    discover_available_models = None
-    get_model_ids = None
+
+def discover_available_models(
+    base_url: str,
+    api_key: Optional[str] = None,
+    timeout: int = 10,
+) -> List[Dict[str, Any]]:
+    """
+    Discover available models from an OpenAI API-compatible endpoint.
+
+    Args:
+        base_url: Base URL of the API endpoint (e.g., "https://api.openai.com/v1")
+        api_key: API key for authentication (optional)
+        timeout: Request timeout in seconds
+
+    Returns:
+        List of model dictionaries from the API response
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+
+    Example:
+        >>> models = discover_available_models(
+        ...     "https://api.openai.com/v1",
+        ...     api_key="sk-..."
+        ... )
+        >>> print([m['id'] for m in models])
+        ['gpt-4', 'gpt-3.5-turbo', ...]
+    """
+    url = f"{base_url.rstrip('/')}/models"
+
+    headers = {}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    try:
+        response = requests.get(url, headers=headers, timeout=timeout)
+        response.raise_for_status()
+
+        data = response.json()
+
+        # OpenAI API returns models in a "data" field
+        if "data" in data:
+            return data["data"]
+        # Some implementations return models directly
+        elif isinstance(data, list):
+            return data
+        else:
+            logger.warning(f"Unexpected response format from {url}: {data}")
+            return []
+
+    except Exception as e:
+        logger.error(f"Failed to discover models from {url}: {e}")
+        raise
+
+
+def get_model_ids(
+    base_url: str,
+    api_key: Optional[str] = None,
+    timeout: int = 10,
+) -> List[str]:
+    """
+    Get list of model IDs from an OpenAI API-compatible endpoint.
+
+    Args:
+        base_url: Base URL of the API endpoint
+        api_key: API key for authentication (optional)
+        timeout: Request timeout in seconds
+
+    Returns:
+        List of model ID strings
+
+    Raises:
+        requests.exceptions.RequestException: If the request fails
+
+    Example:
+        >>> model_ids = get_model_ids("https://api.openai.com/v1", api_key="sk-...")
+        >>> print(model_ids)
+        ['gpt-4', 'gpt-3.5-turbo', ...]
+    """
+    models = discover_available_models(base_url, api_key, timeout)
+    return [model.get("id", "") for model in models if "id" in model]
 
 
 def discover_models_for_backend(
@@ -50,12 +124,6 @@ def discover_models_for_backend(
         >>> print(models)
         ['gpt-4', 'gpt-3.5-turbo', ...]
     """
-    if get_model_ids is None:
-        logger.error(
-            "Model discovery not available - charge.clients.openai_base not imported"
-        )
-        return []
-
     # Import here to avoid circular dependencies
     from charge.clients.openai_base import (
         get_base_url_for_backend,
