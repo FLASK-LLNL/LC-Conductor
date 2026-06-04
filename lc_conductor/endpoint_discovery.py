@@ -15,8 +15,14 @@ API endpoints.
 from typing import List, Optional, Dict, Any
 from loguru import logger
 from pydantic import BaseModel
-import requests
 import os
+
+try:
+    from openai import OpenAI
+
+    HAS_OPENAI_SDK = True
+except ImportError:
+    HAS_OPENAI_SDK = False
 
 
 def discover_available_models(
@@ -36,7 +42,7 @@ def discover_available_models(
         List of model dictionaries from the API response
 
     Raises:
-        requests.exceptions.RequestException: If the request fails
+        Exception: If the request fails
 
     Example:
         >>> models = discover_available_models(
@@ -46,30 +52,36 @@ def discover_available_models(
         >>> print([m['id'] for m in models])
         ['gpt-4', 'gpt-3.5-turbo', ...]
     """
-    url = f"{base_url.rstrip('/')}/models"
-
-    headers = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    if not HAS_OPENAI_SDK:
+        logger.error("OpenAI SDK not available - cannot discover models")
+        raise ImportError("openai package is required for model discovery")
 
     try:
-        response = requests.get(url, headers=headers, timeout=timeout)
-        response.raise_for_status()
+        # Create OpenAI client with custom base URL
+        client = OpenAI(
+            base_url=base_url,
+            api_key=api_key or "dummy-key",  # Some endpoints don't require auth
+            timeout=timeout,
+        )
 
-        data = response.json()
+        # Use the SDK's models.list() method
+        models_page = client.models.list()
 
-        # OpenAI API returns models in a "data" field
-        if "data" in data:
-            return data["data"]
-        # Some implementations return models directly
-        elif isinstance(data, list):
-            return data
-        else:
-            logger.warning(f"Unexpected response format from {url}: {data}")
-            return []
+        # Convert Model objects to dictionaries
+        models = [
+            {
+                "id": model.id,
+                "object": model.object,
+                "created": model.created,
+                "owned_by": model.owned_by,
+            }
+            for model in models_page.data
+        ]
+
+        return models
 
     except Exception as e:
-        logger.error(f"Failed to discover models from {url}: {e}")
+        logger.error(f"Failed to discover models from {base_url}: {e}")
         raise
 
 
