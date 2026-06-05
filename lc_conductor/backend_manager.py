@@ -435,7 +435,6 @@ class ActionManager:
                         agent_backend, "reasoning_effort", self.reasoning_effort
                     ),
                     "useCustomModel": False,
-                    "apiKey": "",
                     "toolServers": [
                         tool_server.json()
                         for tool_server in self.task_manager.configured_tool_servers

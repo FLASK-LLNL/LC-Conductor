@@ -43,7 +43,7 @@ export interface OrchestratorSettings {
   model: string;
   reasoningEffort: ReasoningEffort;
   useCustomModel?: boolean;
-  apiKey: string;
+  apiKey?: string;
   backendLabel: string;
   toolServers?: ToolServer[];
 }
@@ -53,6 +53,18 @@ export interface BackendOption {
   label: string;
   defaultUrl: string;
   models: string[];
+}
+
+export interface DiscoverModelsRequest {
+  backend: string;
+  base_url?: string;
+  api_key?: string;
+}
+
+export interface DiscoverModelsResponse {
+  backend: string;
+  models: string[];
+  source: 'discovered' | 'default';
 }
 
 export interface MoleculeNameOption {
