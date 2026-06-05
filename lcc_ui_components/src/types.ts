@@ -189,8 +189,7 @@ export type AgentChatEventKind = 'reasoning' | 'tool_call' | 'tool_result' | 'st
 export interface AgentChatContextUsage {
   usedTokens: number;
   maxTokens?: number;
-  estimated?: boolean;
-  source?: 'provider' | 'estimate';
+  source: 'provider';
   model?: string;
   inputTokens?: number;
   outputTokens?: number;

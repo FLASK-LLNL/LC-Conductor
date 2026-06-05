@@ -129,27 +129,6 @@ const instructionsForMessage = (
   return snapshot ? [{ title: 'Instructions', text: snapshot.instructions }] : [];
 };
 
-const tokenCount = (text: string | undefined): number => {
-  if (!text) return 0;
-  return Math.max(1, Math.ceil(text.length / 4));
-};
-
-const contentTokenCount = (content: unknown): number => {
-  if (!isRecord(content)) return tokenCount(String(content));
-  const text = stringValue(content.text);
-  if (text !== undefined) return tokenCount(text);
-  const uri = stringValue(content.uri) || stringValue(content.dataUrl);
-  if (uri?.startsWith('data:image/')) return 85;
-  const valueForTool = content.arguments ?? content.result ?? content.output;
-  if (valueForTool !== undefined) return tokenCount(stringifyValue(valueForTool));
-  return tokenCount(stringifyValue(content));
-};
-
-const messageTokenCount = (message: JsonRecord): number =>
-  4 +
-  tokenCount(normalizeRole(message)) +
-  contentItems(message).reduce<number>((total, content) => total + contentTokenCount(content), 0);
-
 const providerContextUsage = (
   modelInfo: Record<string, unknown> | undefined
 ): AgentChatContextUsage | undefined => {
@@ -164,31 +143,10 @@ const providerContextUsage = (
     outputTokens: numberValue(lastUsage.outputTokens),
     reasoningTokens: numberValue(lastUsage.reasoningTokens),
     totalTokens,
-    estimated: false,
     source: 'provider',
     model: stringValue(modelInfo?.model),
   };
 };
-
-const estimatedContextUsage = (
-  agent: SerializedAgent,
-  messages: JsonRecord[]
-): AgentChatContextUsage => {
-  const model = stringValue(agent.modelInfo?.model);
-  const task = agent.task;
-  const taskTokens =
-    tokenCount(task?.system_prompt) + (messages.length === 0 ? tokenCount(task?.user_prompt) : 0);
-  const messageTokens = messages.reduce((total, message) => total + messageTokenCount(message), 0);
-  return {
-    usedTokens: taskTokens + messageTokens,
-    estimated: true,
-    source: 'estimate',
-    model,
-  };
-};
-
-const contextUsage = (agent: SerializedAgent, messages: JsonRecord[]): AgentChatContextUsage =>
-  providerContextUsage(agent.modelInfo) || estimatedContextUsage(agent, messages);
 
 const deserializeMessage = (
   agentKey: string,
@@ -308,7 +266,7 @@ export const deserializeAgentChatHistory = (
     agentKey,
     title: agentKey,
     modelInfo: agent.modelInfo,
-    contextUsage: contextUsage(agent, rawMessages),
+    contextUsage: providerContextUsage(agent.modelInfo),
     promptContext,
     messages,
     lastMessage,

@@ -56,7 +56,11 @@ const AgentContextUsageStatus: React.FC<{
 }> = React.memo(function AgentContextUsageStatus({ history, compact = false }) {
   const usage = history?.contextUsage;
   const usedTokens = usage?.usedTokens;
-  if (typeof usedTokens !== 'number' || !Number.isFinite(usedTokens)) {
+  if (
+    usage?.source !== 'provider' ||
+    typeof usedTokens !== 'number' ||
+    !Number.isFinite(usedTokens)
+  ) {
     return null;
   }
 
@@ -79,7 +83,6 @@ const AgentContextUsageStatus: React.FC<{
       : undefined,
     maxTokens ? `${maxTokens.toLocaleString()} token context` : undefined,
     usage?.model,
-    usage?.estimated ? 'estimated (as 0.25 * text length)' : undefined,
   ].filter(Boolean);
   const statusClassName = `agent-context-status${compact ? ' agent-context-status-compact' : ''}`;
   const usageLabel =
