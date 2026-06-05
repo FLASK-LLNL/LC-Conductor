@@ -14,17 +14,15 @@ from typing import Optional
 # Define the callback function - will send message to the websocket if it is provided
 async def handle_callback_log(message):
     record = message.record
-    websocket = record["extra"].get("websocket", None)
-    smiles = record["extra"].get("smiles", None)
-    source = record["extra"].get("source", None)
-    kwargs = {}
-    if smiles:
-        kwargs["smiles"] = smiles
+    extra = record["extra"]
+    websocket = extra.get("websocket", None)
     if websocket:
         # Timestamp is already included in the GUI window
         # timestamp = record["time"].isoformat(" ", timespec='seconds')
         msg = record["message"]
         level = record["level"].name
+        source = extra.get("source", None)
+        source = source if isinstance(source, str) else None
         if not source:
             LEVELS = {
                 "DEBUG": "Debug",
@@ -37,10 +35,20 @@ async def handle_callback_log(message):
             }
             level_str = LEVELS.get(level, level)
             source = f"Logger ({level_str})"
+        message_fields = {"source": source, "message": msg}
+        smiles = extra.get("smiles", None)
+        if isinstance(smiles, str):
+            message_fields["smiles"] = smiles
+        agent_key = extra.get("agentKey", None)
+        if isinstance(agent_key, str):
+            message_fields["agentKey"] = agent_key
+        event_kind = extra.get("eventKind", None)
+        if isinstance(event_kind, str):
+            message_fields["eventKind"] = event_kind
         await websocket.send_json(
             {
                 "type": "response",
-                "message": {"source": source, "message": msg, **kwargs},
+                "message": message_fields,
             }
         )
 
@@ -79,15 +87,25 @@ class CallbackLogger:
         if self.websocket is None:
             return
 
+        source = kwargs.get("source", None)
+        source = source if isinstance(source, str) else f"Logger ({level.title()})"
+        message_fields = {
+            "source": source,
+            "message": message,
+        }
+        smiles = kwargs.get("smiles", None)
+        if isinstance(smiles, str):
+            message_fields["smiles"] = smiles
+        agent_key = kwargs.get("agentKey", None)
+        if isinstance(agent_key, str):
+            message_fields["agentKey"] = agent_key
+        event_kind = kwargs.get("eventKind", None)
+        if isinstance(event_kind, str):
+            message_fields["eventKind"] = event_kind
         payload: dict[str, object] = {
             "type": "response",
-            "message": {
-                "source": kwargs.get("source", f"Logger ({level.title()})"),
-                "message": message,
-            },
+            "message": message_fields,
         }
-        if "smiles" in kwargs:
-            payload["message"]["smiles"] = kwargs["smiles"]
         await self.websocket.send_json(payload)
 
     async def info(self, message, **kwargs):

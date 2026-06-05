@@ -61,6 +61,7 @@ export type {
   AgentHistorySummary,
   SerializedAgentRuntimeConfig,
   SerializedAgentTask,
+  SerializedAgentInstructionSnapshot,
   SerializedAgent,
 
   // Markdown types

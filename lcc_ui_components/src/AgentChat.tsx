@@ -24,6 +24,7 @@ const imageDataUrl = (
 
 const roleLabel = (message: AgentChatMessage): string => {
   if (message.label) return message.label;
+  if (message.pending && message.eventKind) return 'In progress';
   const role = message.role;
   if (role === 'user') return 'User';
   if (role === 'assistant') return 'Agent';
@@ -167,9 +168,14 @@ interface AgentChatMessageRowProps {
 const AgentChatMessageRow: React.FC<AgentChatMessageRowProps> = React.memo(
   function AgentChatMessageRow({ message, debug, resolveImageDataUrl }) {
     return (
-      <div className={`agent-chat-row agent-chat-row-${message.role}`}>
+      <div
+        className={`agent-chat-row agent-chat-row-${message.role}${
+          message.pending ? ' agent-chat-row-pending' : ''
+        }`}
+      >
         <div className="agent-chat-speaker">{roleLabel(message)}</div>
         <div className={`agent-chat-bubble agent-chat-bubble-${message.role}`}>
+          {message.pending && <div className="agent-chat-pending-label">Response in progress</div>}
           {message.text && <MarkdownText text={message.text} collapsibleCodeBlocks />}
 
           {message.context && message.context.length > 0 && (

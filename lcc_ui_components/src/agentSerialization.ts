@@ -7,6 +7,7 @@ import type {
   AgentChatReasoningItem,
   AgentChatToolEvent,
   SerializedAgent,
+  SerializedAgentInstructionSnapshot,
   SerializedAgentTask,
 } from './types.js';
 
@@ -104,6 +105,28 @@ const taskPromptContext = (
     context.push({ title: 'Task prompt', text: userPrompt });
   }
   return context;
+};
+
+const normalizeInstructionHistory = (value: unknown): SerializedAgentInstructionSnapshot[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isRecord)
+    .map((item) => {
+      const messageCount = numberValue(item.messageCount);
+      const instructions = stringValue(item.instructions)?.trim();
+      if (messageCount === undefined || !instructions) return null;
+      return { messageCount, instructions };
+    })
+    .filter((item): item is SerializedAgentInstructionSnapshot => item !== null)
+    .sort((a, b) => a.messageCount - b.messageCount);
+};
+
+const instructionsForMessage = (
+  instructionHistory: SerializedAgentInstructionSnapshot[],
+  messageIndex: number
+): AgentChatContextItem[] => {
+  const snapshot = instructionHistory.find((item) => messageIndex < item.messageCount);
+  return snapshot ? [{ title: 'Instructions', text: snapshot.instructions }] : [];
 };
 
 const tokenCount = (text: string | undefined): number => {
@@ -251,6 +274,7 @@ const deserializeMessage = (
 };
 
 export const deserializeAgentChatHistory = (
+  agentKey: string,
   agent: SerializedAgent,
   options: DeserializeAgentOptions = {}
 ): AgentChatHistory => {
@@ -258,16 +282,31 @@ export const deserializeAgentChatHistory = (
   const rawMessages = sessionMessages(session);
   const promptContext = taskPromptContext(agent.task);
   const debug = Boolean(options.debug);
+  const instructionHistory = normalizeInstructionHistory(agent.instructionHistory);
+  const hasInstructionHistory = instructionHistory.length > 0;
+  const userMessageCount = rawMessages.filter(
+    (message) => normalizeRole(message) === 'user'
+  ).length;
   const messages = rawMessages
-    .map((message, index) =>
-      deserializeMessage(agent.agentKey, message, index, promptContext, debug)
-    )
+    .map((message, index) => {
+      const messagePromptContext =
+        normalizeRole(message) === 'user' ? instructionsForMessage(instructionHistory, index) : [];
+      const fallbackPromptContext =
+        !hasInstructionHistory && userMessageCount <= 1 ? promptContext : [];
+      return deserializeMessage(
+        agentKey,
+        message,
+        index,
+        messagePromptContext.length > 0 ? messagePromptContext : fallbackPromptContext,
+        debug
+      );
+    })
     .filter((message): message is AgentChatMessage => message !== null);
   const lastMessage = [...messages].reverse().find((message) => message.text)?.text || '';
 
   return {
-    agentKey: agent.agentKey,
-    title: agent.agentKey,
+    agentKey,
+    title: agentKey,
     modelInfo: agent.modelInfo,
     contextUsage: contextUsage(agent, rawMessages),
     promptContext,

@@ -27,17 +27,21 @@ class AgentRequest(BaseModel):
 
 
 class AgentRuntimeConfigRecord(BaseModel):
-    agentKey: str
     backend: str | None = None
     model: str | None = None
 
 
+class AgentInstructionSnapshotRecord(BaseModel):
+    messageCount: int
+    instructions: str
+
+
 class AgentRecord(BaseModel):
-    agentKey: str
     runtimeConfig: AgentRuntimeConfigRecord | None = None
     memory: str = ""
     modelInfo: JsonObject = Field(default_factory=dict)
     task: JsonObject | None = None
+    instructionHistory: list[AgentInstructionSnapshotRecord] | None = None
 
 
 class ExperimentAgentRecords(BaseModel):
@@ -46,9 +50,10 @@ class ExperimentAgentRecords(BaseModel):
 
 class AgentResponse(BaseModel):
     type: Literal["agent-response"] = "agent-response"
+    agentKey: str
     agent: AgentRecord
 
 
 class ListAgentsResponse(BaseModel):
     type: Literal["list-agents-response"] = "list-agents-response"
-    agents: list[AgentRecord]
+    agents: list[str]

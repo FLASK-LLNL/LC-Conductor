@@ -304,6 +304,18 @@
   color: var(--lcc-text-primary, #e9d5ff);
 }
 
+.agent-chat-row-pending .agent-chat-bubble {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.agent-chat-pending-label {
+  color: var(--lcc-text-muted, #c4b5fd);
+  font-size: 0.72rem;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
 .agent-chat-images {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));

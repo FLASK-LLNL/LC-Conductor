@@ -110,6 +110,10 @@ export interface SidebarMessage {
   message: string;
   smiles: string | null;
   source: string;
+  agentKey?: string;
+  eventKind?: AgentChatEventKind;
+  title?: string;
+  instructions?: AgentChatContextItem[] | string;
   // Server -> browser preview refs only. The browser resolves data URLs from
   // the Agent experiment context so base64 image bytes are not duplicated here.
   images?: Record<string, AgentImageRef>;
@@ -180,6 +184,8 @@ export interface AgentChatContextItem {
   text: string;
 }
 
+export type AgentChatEventKind = 'reasoning' | 'tool_call' | 'tool_result' | 'status';
+
 export interface AgentChatContextUsage {
   usedTokens: number;
   maxTokens?: number;
@@ -197,6 +203,8 @@ export interface AgentChatMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
   label?: string;
   text: string;
+  pending?: boolean;
+  eventKind?: AgentChatEventKind;
   context?: AgentChatContextItem[];
   images?: AgentChatImageRef[];
   reasoning?: AgentChatReasoningItem[];
@@ -220,7 +228,6 @@ export interface AgentChatHistory {
 export type AgentHistorySummary = AgentChatHistory;
 
 export interface SerializedAgentRuntimeConfig {
-  agentKey: string;
   backend?: string;
   model?: string;
 }
@@ -230,12 +237,17 @@ export interface SerializedAgentTask {
   user_prompt?: string;
 }
 
+export interface SerializedAgentInstructionSnapshot {
+  messageCount: number;
+  instructions: string;
+}
+
 export interface SerializedAgent {
-  agentKey: string;
   runtimeConfig?: SerializedAgentRuntimeConfig;
   memory?: string;
   modelInfo?: Record<string, unknown>;
   task?: SerializedAgentTask | null;
+  instructionHistory?: SerializedAgentInstructionSnapshot[];
 }
 
 // ============================================================================

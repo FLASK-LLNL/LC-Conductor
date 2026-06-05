@@ -223,27 +223,26 @@ class ActionManager:
         if record is None:
             return
         await self.websocket.send_json(
-            AgentResponse(agent=record).model_dump(exclude_none=True)
+            AgentResponse(agentKey=agent_key, agent=record).model_dump(
+                exclude_none=True
+            )
         )
 
     async def handle_list_agents(self, data: object) -> None:
         del data
-        records = self.agent_records()
         await self.websocket.send_json(
-            ListAgentsResponse(agents=list(records.values())).model_dump(
+            ListAgentsResponse(agents=list(self.experiment.agent_registry)).model_dump(
                 exclude_none=True
             )
         )
 
     async def handle_get_agent(self, data: object) -> None:
         request = AgentRequest.model_validate(data)
-        record = self.agent_records().get(request.agentKey) or AgentRecord(
-            agentKey=request.agentKey,
-            memory="",
-            modelInfo={},
-        )
+        record = self.agent_records().get(request.agentKey) or AgentRecord()
         await self.websocket.send_json(
-            AgentResponse(agent=record).model_dump(exclude_none=True)
+            AgentResponse(agentKey=request.agentKey, agent=record).model_dump(
+                exclude_none=True
+            )
         )
 
     async def _send_processing_message(
