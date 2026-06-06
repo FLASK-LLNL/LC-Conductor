@@ -137,31 +137,6 @@ const LazyDetails: React.FC<LazyDetailsProps> = ({ className, summary, renderCon
   );
 };
 
-const AgentPromptContextDetails: React.FC<{
-  promptContext?: AgentChatHistory['promptContext'];
-}> = React.memo(function AgentPromptContextDetails({ promptContext }) {
-  return (
-    <LazyDetails
-      className="agent-chat-prompt-context"
-      summary="Prompt context"
-      renderContent={() =>
-        promptContext && promptContext.length > 0 ? (
-          promptContext.map((item, index) => (
-            <div key={`history-context-${index}`} className="agent-chat-detail">
-              <div className="agent-chat-detail-title">{item.title}</div>
-              <MarkdownText text={item.text} collapsibleCodeBlocks />
-            </div>
-          ))
-        ) : (
-          <div className="agent-chat-detail agent-chat-detail-muted">
-            Prompt context not available
-          </div>
-        )
-      }
-    />
-  );
-});
-
 interface AgentChatMessageRowProps {
   message: AgentChatMessage;
   debug: boolean;
@@ -317,8 +292,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = React.memo(function
           Debug
         </label>
       </div>
-
-      <AgentPromptContextDetails promptContext={history?.promptContext} />
 
       <div className="agent-chat-messages custom-scrollbar" ref={scrollRef}>
         {!history || history.messages.length === 0 ? (
