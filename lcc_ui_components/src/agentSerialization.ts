@@ -8,6 +8,7 @@ import type {
   AgentChatToolEvent,
   SerializedAgent,
   SerializedAgentInstructionSnapshot,
+  SerializedAgentPendingUserMessage,
   SerializedAgentTask,
 } from './types.js';
 
@@ -91,6 +92,24 @@ const imageRefFromContent = (
   sizeBytes: numberValue(content.sizeBytes) || 0,
   dataUrl,
 });
+
+const normalizePendingUserMessage = (value: unknown): SerializedAgentPendingUserMessage | null => {
+  if (!isRecord(value)) return null;
+  const text = stringValue(value.text)?.trim();
+  if (!text) return null;
+  const images = Array.isArray(value.images) ? value.images.filter(isRecord) : [];
+  return {
+    text,
+    afterMessageCount: numberValue(value.afterMessageCount),
+    images: images.map((image, index) => ({
+      id: stringValue(image.id) || `pending-image:${index}`,
+      name: stringValue(image.name) || 'Uploaded image',
+      mimeType: stringValue(image.mimeType) || 'image',
+      sizeBytes: numberValue(image.sizeBytes) || 0,
+      dataUrl: stringValue(image.dataUrl),
+    })),
+  };
+};
 
 const taskPromptContext = (
   task: SerializedAgentTask | null | undefined
@@ -260,6 +279,17 @@ export const deserializeAgentChatHistory = (
       );
     })
     .filter((message): message is AgentChatMessage => message !== null);
+  const pendingUserMessage = normalizePendingUserMessage(agent.pendingUserMessage);
+  if (pendingUserMessage && rawMessages.length <= (pendingUserMessage.afterMessageCount || 0)) {
+    messages.push({
+      id: `${agentKey}:pending-user:${pendingUserMessage.afterMessageCount || 0}`,
+      role: 'user',
+      text: pendingUserMessage.text,
+      pending: true,
+      context: promptContext.length > 0 ? promptContext : undefined,
+      images: pendingUserMessage.images,
+    });
+  }
   const lastMessage = [...messages].reverse().find((message) => message.text)?.text || '';
 
   return {

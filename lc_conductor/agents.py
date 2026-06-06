@@ -36,12 +36,19 @@ class AgentInstructionSnapshotRecord(BaseModel):
     instructions: str
 
 
+class AgentPendingUserMessageRecord(BaseModel):
+    text: str
+    afterMessageCount: int = 0
+    images: list[JsonObject] | None = None
+
+
 class AgentRecord(BaseModel):
     runtimeConfig: AgentRuntimeConfigRecord | None = None
     memory: str = ""
     modelInfo: JsonObject = Field(default_factory=dict)
     task: JsonObject | None = None
     instructionHistory: list[AgentInstructionSnapshotRecord] | None = None
+    pendingUserMessage: AgentPendingUserMessageRecord | None = None
 
 
 class ExperimentAgentRecords(BaseModel):

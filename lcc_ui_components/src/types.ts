@@ -241,12 +241,19 @@ export interface SerializedAgentInstructionSnapshot {
   instructions: string;
 }
 
+export interface SerializedAgentPendingUserMessage {
+  text: string;
+  afterMessageCount?: number;
+  images?: AgentChatImageRef[];
+}
+
 export interface SerializedAgent {
   runtimeConfig?: SerializedAgentRuntimeConfig;
   memory?: string;
   modelInfo?: Record<string, unknown>;
   task?: SerializedAgentTask | null;
   instructionHistory?: SerializedAgentInstructionSnapshot[];
+  pendingUserMessage?: SerializedAgentPendingUserMessage | null;
 }
 
 // ============================================================================
