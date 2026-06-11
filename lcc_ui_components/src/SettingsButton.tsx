@@ -77,6 +77,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   username,
   httpServerUrl,
   className = '',
+  hasServiceApiKey,
 }) => {
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<'orchestrator' | 'tools'>('orchestrator');
@@ -105,6 +106,10 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   const [apiKeyInput, setApiKeyInput] = React.useState(initialSettings?.apiKey || '');
   const [apiKeySaved, setApiKeySaved] = React.useState(true); // Track if current input is saved
   const [showApiKey, setShowApiKey] = React.useState(false); // Track if API key should be visible
+  // Track if using service API key (from environment)
+  const [usingServiceKey, setUsingServiceKey] = React.useState(
+    !initialSettings?.apiKey && !!hasServiceApiKey
+  );
 
   // Track if we've initialized from initialSettings (to avoid overwriting on backend echoes)
   const hasInitializedFromBackendRef = React.useRef(false);
@@ -1566,7 +1571,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                   <div className="form-group">
                     <label className="form-label">
                       API Key
-                      <span className="helper-text" style={{ marginLeft: '0.5rem' }}>
+                      <span className="helper-text ml-2">
                         {(tempSettings.backend === 'ollama' ||
                           tempSettings.backend === 'huggingface' ||
                           tempSettings.backend === 'vllm') &&
@@ -1578,71 +1583,109 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                         {tempSettings.backend === 'gemini' && '(GOOGLE_API_KEY)'}
                       </span>
                     </label>
-                    <p
-                      className="helper-text"
-                      style={{ marginTop: '-0.25rem', marginBottom: '0.5rem' }}
-                    >
-                      Clear and save to use environment variable fallback
-                    </p>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
-                      <input
-                        type={showApiKey ? 'text' : 'password'}
-                        value={apiKeyInput}
-                        onChange={(e) => handleApiKeyInputChange(e.target.value)}
-                        placeholder="Enter your API key"
-                        className="form-input"
-                        style={{ flex: 1 }}
-                      />
-                      <button
-                        onClick={handleSaveApiKey}
-                        disabled={apiKeySaved}
-                        className="btn btn-secondary btn-sm"
-                        style={{
-                          whiteSpace: 'nowrap',
-                          minWidth: '120px',
-                        }}
-                      >
-                        {isDiscovering ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Saving...
-                          </>
-                        ) : apiKeySaved ? (
-                          <>
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
+
+                    {usingServiceKey ? (
+                      /* Service Key Mode - disabled input with info */
+                      <>
+                        <p className="helper-text mb-2">
+                          Using API key from server environment (not visible for security)
+                        </p>
+                        <div className="flex gap-2 items-stretch">
+                          <input
+                            type="text"
+                            value="(using service credentials)"
+                            disabled
+                            className="form-input flex-1 service-key-input"
+                          />
+                          <button
+                            onClick={() => {
+                              setUsingServiceKey(false);
+                              setApiKeyInput('');
+                              setApiKeySaved(false);
+                            }}
+                            className="btn btn-secondary btn-sm flex-shrink-0"
+                          >
+                            Use Custom API Key
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      /* Custom Key Mode - normal input */
+                      <>
+                        <p className="helper-text mb-2">
+                          {hasServiceApiKey
+                            ? 'Using custom API key (click "Use Service Key" to switch back)'
+                            : 'Clear and save to use environment variable fallback'}
+                        </p>
+                        <div className="flex gap-2 items-stretch">
+                          <input
+                            type={showApiKey ? 'text' : 'password'}
+                            value={apiKeyInput}
+                            onChange={(e) => handleApiKeyInputChange(e.target.value)}
+                            placeholder="Enter your API key"
+                            className="form-input flex-1"
+                          />
+                          <button
+                            onClick={handleSaveApiKey}
+                            disabled={apiKeySaved}
+                            className="btn btn-secondary btn-sm flex-shrink-0 api-key-save-btn"
+                          >
+                            {isDiscovering ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : apiKeySaved ? (
+                              <>
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                                {apiKeyInput ? 'Saved' : 'Using Env'}
+                              </>
+                            ) : apiKeyInput ? (
+                              'Save API Key'
+                            ) : (
+                              'Clear API Key'
+                            )}
+                          </button>
+                        </div>
+                        <div className="flex-between mt-2">
+                          <label className="form-label flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={showApiKey}
+                              onChange={(e) => setShowApiKey(e.target.checked)}
+                              className="form-checkbox"
+                            />
+                            <span className="text-sm">Show API key</span>
+                          </label>
+                          {hasServiceApiKey && (
+                            <button
+                              onClick={async () => {
+                                setUsingServiceKey(true);
+                                setApiKeyInput('');
+                                setApiKeySaved(false);
+                                // Trigger discovery with service key
+                                await handleSaveApiKey();
+                              }}
+                              className="btn btn-secondary btn-sm"
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                            {apiKeyInput ? 'Saved' : 'Using Env'}
-                          </>
-                        ) : apiKeyInput ? (
-                          'Save API Key'
-                        ) : (
-                          'Clear API Key'
-                        )}
-                      </button>
-                    </div>
-                    <label
-                      className="form-label flex items-center gap-2 cursor-pointer"
-                      style={{ marginTop: '0.5rem', marginBottom: 0 }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={showApiKey}
-                        onChange={(e) => setShowApiKey(e.target.checked)}
-                        className="form-checkbox"
-                      />
-                      <span className="text-sm">Show API key</span>
-                    </label>
+                              Use Service Key
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

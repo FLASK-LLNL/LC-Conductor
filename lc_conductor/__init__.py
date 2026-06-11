@@ -45,6 +45,14 @@ from lc_conductor.endpoint_discovery import (
     DiscoverModelsRequest,
     DiscoverModelsResponse,
 )
+from lc_conductor.resolve_default_parameters import (
+    resolve_orchestrator_config,
+    get_api_key_for_orchestrator,
+    resolve_backend,
+    resolve_model,
+    resolve_api_key,
+    resolve_base_url,
+)
 
 __all__ = [
     "ActionManager",
@@ -82,4 +90,10 @@ __all__ = [
     "discover_models_endpoint",
     "DiscoverModelsRequest",
     "DiscoverModelsResponse",
+    "resolve_orchestrator_config",
+    "get_api_key_for_orchestrator",
+    "resolve_backend",
+    "resolve_model",
+    "resolve_api_key",
+    "resolve_base_url",
 ]
