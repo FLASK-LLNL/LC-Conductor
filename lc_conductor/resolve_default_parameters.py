@@ -206,7 +206,7 @@ def resolve_orchestrator_config(
         }
     """
     backend = resolve_backend(default_backend)
-    model = resolve_model(backend, default_model)
+    model = resolve_model(default_model, backend)
     base_url = resolve_base_url(backend)
     api_key, is_service_key = resolve_api_key(backend)
 
@@ -214,7 +214,6 @@ def resolve_orchestrator_config(
         "backend": backend,
         "model": model,
         "baseUrl": base_url or "",
-        "apiKey": api_key or "",
         "hasServiceApiKey": is_service_key,
     }
 
