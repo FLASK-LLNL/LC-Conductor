@@ -46,6 +46,8 @@ from lc_conductor.tooling import (
     resolve_builtin_tool_descriptors,
 )
 
+from lc_conductor.message_handler import handles, HandlerBase
+
 # Mapping from backend name to human-readable labels. Mirrored from the frontend
 BACKEND_LABELS = {
     "openai": "OpenAI",
@@ -197,6 +199,7 @@ class ActionManager(HandlerBase):
         if "runSettings" in data:
             self.run_settings = RunSettings(**data["runSettings"])
 
+    @handles("save-context")
     async def handle_save_state(self, data, *args, **kwargs) -> None:
         """Handle save state action."""
         logger.trace("Save state action received")
@@ -207,6 +210,7 @@ class ActionManager(HandlerBase):
             {"type": "save-context-response", "experimentContext": experiment_context}
         )
 
+    @handles("load-context")
     async def handle_load_state(self, data, *args, **kwargs) -> None:
         """Handle load state action."""
         logger.trace("Load state action received")
@@ -233,6 +237,7 @@ class ActionManager(HandlerBase):
             )
         )
 
+    @handles("list-agents")
     async def handle_list_agents(self, data: object) -> None:
         del data
         await self.websocket.send_json(
@@ -241,6 +246,7 @@ class ActionManager(HandlerBase):
             )
         )
 
+    @handles("get-agent")
     async def handle_get_agent(self, data: object) -> None:
         request = AgentRequest.model_validate(data)
         record = self.agent_records().get(request.agentKey) or AgentRecord()
@@ -350,6 +356,7 @@ class ActionManager(HandlerBase):
             return self.task_manager.selected_tool_runtime
         return self._build_tool_runtime()
 
+    @handles("list-tools")
     async def handle_list_tools(self, *args, **kwargs) -> None:
         tools: list[ToolDescriptor] = []
         server_list = self._configured_backend_tool_servers()
@@ -490,6 +497,7 @@ class ActionManager(HandlerBase):
         )
         return agent_backend.backend, model, base_url
 
+    @handles("ui-update-orchestrator-settings")
     async def handle_orchestrator_settings_update(self, data: dict) -> None:
         tool_server_payloads = [
             server
@@ -573,12 +581,14 @@ class ActionManager(HandlerBase):
                 }
             )
 
+    @handles("reset")
     async def handle_reset(self, *args, **kwargs) -> None:
         """Handle reset action."""
         await self.task_manager.cancel_current_task()
         self.experiment.reset()
         self.retro_synth_context = None
 
+    @handles("stop")
     async def handle_stop(self, *args, **kwargs) -> None:
         """Handle stop action."""
         logger.info("Stop action received")
@@ -605,6 +615,7 @@ class ActionManager(HandlerBase):
             except Exception as e:
                 logger.error(f"Failed to send stopped confirmation: {e}")
 
+    @handles("select-tools-for-task")
     async def handle_select_tools_for_task(self, data: dict) -> None:
         """Handle select-tools-for-task action."""
         logger.info("Select tools for task")
@@ -616,6 +627,7 @@ class ActionManager(HandlerBase):
         ]
         self.task_manager.selected_tool_runtime = self._build_tool_runtime(descriptors)
 
+    @handles("get-username")
     async def handle_get_username(self, _: dict) -> None:
         await self.websocket.send_json(
             {
