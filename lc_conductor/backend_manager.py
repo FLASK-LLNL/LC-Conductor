@@ -5,7 +5,8 @@
 ## SPDX-License-Identifier: Apache-2.0
 ###############################################################################
 
-from typing import Any, Literal, Optional, Tuple
+import argparse
+from typing import Any, Callable, Literal, Optional, Tuple
 from fastapi import WebSocket
 import asyncio
 import os
@@ -17,7 +18,6 @@ from charge.experiments.experiment import Experiment
 from charge.clients.agent_factory import AgentFactory
 from charge.clients.agentframework import AgentFrameworkBackend
 
-from functools import partial
 from lc_conductor.tool_registration import (
     list_server_urls,
     list_server_tools,
@@ -61,7 +61,7 @@ BACKEND_LABELS = {
 
 
 class TaskManager:
-    """Manages background tasks and processes state for a websocket connection."""
+    """Manages background tasks and processes state for a user session."""
 
     def __init__(self, websocket: WebSocket, max_workers: int = 4):
         self.websocket = websocket
@@ -150,24 +150,23 @@ class TaskManager:
         self.clogger.unbind()
 
 
-class ActionManager:
-    """Handles action state for a websocket connection."""
+class ActionManager(HandlerBase):
+    """Handles action state for a user session."""
 
     def __init__(
         self,
-        task_manager: TaskManager,
-        experiment: Experiment,
-        args,
+        websocket: WebSocket,
+        args: argparse.Namespace,
         username: str,
         builtin_tool_definitions: Optional[list[BuiltinToolDefinition]] = None,
     ):
-        self.task_manager = task_manager
-        self.experiment = experiment
+        self.task_manager = TaskManager(websocket)
+        self.experiment = Experiment(task=None)  # Initialize an empty experiment
         self.args = args
         self.username = username
         self.run_settings: RunSettings = RunSettings()
         self.reasoning_effort: Literal["low", "medium", "high"] = "medium"
-        self.websocket = task_manager.websocket
+        self.websocket = websocket
         self.builtin_tool_definitions = builtin_tool_definitions or []
         if not self.task_manager.configured_tool_servers:
             # Sync configured_tool_servers with registered servers from SERVERS global
@@ -183,6 +182,12 @@ class ActionManager:
                     "Starting with no configured tool servers."
                 )
                 self.task_manager.configured_tool_servers = []
+
+    async def cleanup(self):
+        """
+        Tears down the action manager
+        """
+        await self.task_manager.close()
 
     def _get_wormhole_token(self) -> Optional[str]:
         """Extract wormhole community subtoken from websocket headers."""

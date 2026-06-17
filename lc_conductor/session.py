@@ -14,10 +14,15 @@ import json
 import threading
 import time
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Iterable
+from typing import Any, AsyncIterator, Iterable, TYPE_CHECKING
 
 from starlette.types import Message
 from starlette.websockets import WebSocket, WebSocketDisconnect
+
+from loguru import logger
+
+if TYPE_CHECKING:
+    from lc_conductor.backend_manager import ActionManager
 
 # Asyncio has no portable way to await a threading.Lock directly. Send/receive
 # serialization uses a short async poll so cancellation cannot strand a lock
@@ -323,3 +328,142 @@ class PersistentWebsocketWrapper:
                 yield await self.receive_json()
         except WebSocketDisconnect:
             pass
+
+
+class UserSession:
+    """
+    Represents a user session (akin to a live websocket connection that might
+    disconnect and reconnect at any time). Stores all the necessary data for
+    this session (e.g., experiment context).
+    """
+
+    def __init__(
+        self,
+        username: str,
+        session_id: str,
+        websocket: WebSocket,
+        action_manager: "ActionManager",
+    ) -> None:
+        """
+        Initializes a user session.
+
+        :param username: The user name.
+        :param session_id: A unique ID for this session.
+        :param websocket: A Starlette WebSocket to use for message management
+        :param task_manager: An LC Conductor Task Manager (managing async tasks)
+        :param action_manager: An Action Manager (managing server responses)
+        """
+        self.username: str = username
+        self.session_id: str = session_id
+        self.created_at: float = time.monotonic()
+
+        # Fields necessary for running the code
+        self.websocket = PersistentWebsocketWrapper(websocket)
+        self.action_manager = action_manager
+
+        # Session management
+        UserSessionManager.add_session(username, self)
+
+    @property
+    def is_active(self):
+        return self.websocket.websocket is not None
+
+    def handle_action(self, action: str, data: dict[str, Any]):
+        raise NotImplementedError("Abstract method, implement in subclass")
+
+    async def _event_loop_thread(self):
+        """
+        Event loop runner
+        """
+        try:
+            while True:
+                try:
+                    data: dict[str, Any] = await self.websocket.receive_json()
+                    action: str | None = data.get("action")
+                    if not action:
+                        await self.action_manager.task_manager.clogger.error(
+                            f"Malformed user message: {data}"
+                        )
+                        continue
+                    await self.handle_action(action, data)
+                except SessionTimedOut:
+                    # Specialized exception breaks loop
+                    break
+                except WebSocketDisconnect:
+                    # Websocket disconnection does nothing
+                    continue
+                except Exception as ex:
+                    # Other exceptions are reported to the user
+                    await self.action_manager.task_manager.clogger.exception(ex)
+                    continue
+        except SessionTimedOut:
+            await self.websocket.set_websocket(None)
+            UserSessionManager.remove_session(self.username, self.session_id)
+
+        # Tear down action manager
+        await self.action_manager.cleanup()
+
+    async def event_loop(self):
+        """
+        Runs an event loop listening for messages.
+
+        :note: The event loop runs on a separate thread.
+        """
+        await asyncio.to_thread(self._event_loop_thread)
+
+
+class UserSessionManager:
+    """
+    A singleton object that manages mapping users to their active sessions
+    for reconstitution upon reconnection. Also manages the session threadpool
+    resource.
+    """
+
+    _GUARD = threading.RLock()
+    USER_TO_SESSIONS: dict[str, list[UserSession]] = {}
+
+    @classmethod
+    def get_latest_inactive_session(cls, user: str) -> UserSession | None:
+        """
+        Returns the latest-opened inactive session for the given username, or
+        None if there are none.
+        """
+        cls.cleanup_sessions()
+        with cls._GUARD:
+            sessions = cls.USER_TO_SESSIONS.get(user)
+        if not sessions:  # Captures both "is None" and "len(sessions) == 0"
+            return None
+        for session in reversed(sessions):
+            if not session.is_active:
+                return session
+        return None  # All sessions are active
+
+    @classmethod
+    def add_session(cls, user: str, session: UserSession):
+        with cls._GUARD:
+            if user not in cls.USER_TO_SESSIONS:
+                cls.USER_TO_SESSIONS[user] = [session]
+            else:
+                cls.USER_TO_SESSIONS[user].append(session)
+
+    @classmethod
+    def remove_session(cls, user: str, session_id: str):
+        with cls._GUARD:
+            sessions = cls.USER_TO_SESSIONS.get(user)
+            if sessions is None:
+                logger.warning(f"User {user} does not exist in active sessions")
+                return
+            cls.USER_TO_SESSIONS[user] = [
+                s for s in sessions if s.session_id != session_id
+            ]
+        cls.cleanup_sessions()
+
+    @classmethod
+    def cleanup_sessions(cls):
+        """
+        Garbage-collects all inactive users.
+        """
+        with cls._GUARD:
+            for user, sessions in list(cls.USER_TO_SESSIONS.items()):
+                if not sessions:
+                    del cls.USER_TO_SESSIONS[user]
