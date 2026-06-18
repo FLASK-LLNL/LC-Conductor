@@ -59,6 +59,11 @@ class HandlerBase(metaclass=HandlerMeta):
     Base class for action managers to use for the ``handles`` syntactic sugar.
     """
 
+    _handlers: dict[str, str]
+
+    def has_handler(self, action_name: str) -> bool:
+        return action_name in self._handlers
+
     def dispatch(self, action_name: str, *args, **kwargs):
         try:
             method_name = self._handlers[action_name]

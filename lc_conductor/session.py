@@ -368,7 +368,7 @@ class UserSession:
     def is_active(self):
         return self.websocket.websocket is not None
 
-    def handle_action(self, action: str, data: dict[str, Any]):
+    async def handle_action(self, action: str, data: dict[str, Any]):
         raise NotImplementedError("Abstract method, implement in subclass")
 
     async def _event_loop_thread(self):
