@@ -127,10 +127,6 @@ class PersistentWebsocketWrapper:
         return await self._receive_with_timeout("receive")
 
     async def send(self, message: Message) -> None:
-        if "timestamp" not in message:
-            # Add server-local timestamp, in case a message is sent at a later point
-            message["timestamp"] = time.time()
-
         async with self._serialized_send_access():
             with self._state_condition:
                 self._raise_if_timed_out_locked()
@@ -171,6 +167,11 @@ class PersistentWebsocketWrapper:
     async def send_json(self, data: Any, mode: str = "text") -> None:
         if mode not in {"text", "binary"}:
             raise RuntimeError('The "mode" argument should be "text" or "binary".')
+
+        if "timestamp" not in data:
+            # Add server-local timestamp, in case a message is sent at a later point
+            data["timestamp"] = time.time()
+
         text = json.dumps(data, separators=(",", ":"), ensure_ascii=False)
         if mode == "text":
             await self.send({"type": "websocket.send", "text": text})

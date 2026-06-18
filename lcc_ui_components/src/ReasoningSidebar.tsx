@@ -17,17 +17,46 @@ import type {
 } from './types.js';
 import './style.css';
 
-const getMessageId = (msg: SidebarMessage, idx: number): string =>
-  msg.id ? String(msg.id) : `${msg.timestamp}-${idx}`;
+const getMessageTimestamp = (msg: SidebarMessage): string | number => msg.timestamp ?? Date.now();
 
-const formatTimestamp = (timestamp: string): string => {
-  const date = new Date(timestamp);
+const timestampToDate = (timestamp: string | number): Date => {
+  if (typeof timestamp === 'number') {
+    const timestampMs = timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp;
+    return new Date(timestampMs);
+  }
+
+  const numericTimestamp = Number(timestamp);
+  if (Number.isFinite(numericTimestamp) && timestamp.trim() !== '') {
+    const timestampMs =
+      numericTimestamp < 10_000_000_000 ? numericTimestamp * 1000 : numericTimestamp;
+    return new Date(timestampMs);
+  }
+
+  return new Date(timestamp);
+};
+
+const getMessageId = (msg: SidebarMessage, idx: number): string =>
+  msg.id ? String(msg.id) : `${getMessageTimestamp(msg)}-${idx}`;
+
+const formatTimestamp = (timestamp: string | number): string => {
+  const date = timestampToDate(timestamp);
 
   if (Number.isNaN(date.getTime())) {
-    return timestamp;
+    return String(timestamp);
   }
 
   return date.toLocaleString();
+};
+
+const formatMessageTime = (msg: SidebarMessage): string => {
+  const timestamp = getMessageTimestamp(msg);
+  const date = timestampToDate(timestamp);
+
+  if (Number.isNaN(date.getTime())) {
+    return String(timestamp);
+  }
+
+  return date.toLocaleTimeString();
 };
 
 const formatReasoningMessagesForClipboard = (
@@ -53,7 +82,7 @@ const formatReasoningMessagesForClipboard = (
   const formattedMessages = messages.map((msg, idx) => {
     const lines = [
       `## ${idx + 1}. ${msg.source}`,
-      `Time: ${formatTimestamp(msg.timestamp)}`,
+      `Time: ${formatTimestamp(getMessageTimestamp(msg))}`,
       '',
       msg.message.trim(),
     ];
@@ -544,9 +573,7 @@ export const ReasoningSidebar: React.FC<ReasoningSidebarProps> = ({
                 }
               >
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs text-muted">
-                    {new Date(msg.timestamp).toLocaleTimeString()}
-                  </div>
+                  <div className="text-xs text-muted">{formatMessageTime(msg)}</div>
                   <div className="badge badge-primary">{msg.source}</div>
                 </div>
                 <div className="text-sm text-secondary">
