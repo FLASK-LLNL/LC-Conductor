@@ -157,6 +157,7 @@ def discover_models_for_backend(
         logger.warning(f"No base URL available for backend: {backend}")
         return []
 
+    # BVE do we send ind the API key here only when the user has provided it.  Otherwise it should be discovered from the environment.
     # Get API key if not provided
     if not api_key:
         api_key = get_api_key_for_backend(backend)
@@ -307,6 +308,7 @@ def validate_initial_model(
             )
             return model or ""
 
+        # BVE provide a way to promote a "normal model name" to a service model name
         # If model is provided and valid, return it
         if model and model in available_models:
             logger.info(f"Model '{model}' validated for backend '{backend}'")

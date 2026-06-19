@@ -205,10 +205,15 @@ def resolve_orchestrator_config(
             'hasServiceApiKey': True
         }
     """
-    backend = resolve_backend(default_backend)
-    model = resolve_model(default_model, backend)
+    # 1. Identify the backend being used
+    backend = resolve_backend(requested_backend, default_backend)
+    # 2. Check for a custom or backend specific URL
     base_url = resolve_base_url(backend)
+    # 3. If no API_KEY is provided check the environment
+    # if not requested_api_key:
     api_key, is_service_key = resolve_api_key(backend)
+    # 4. Find a valid model for the API_KEY at URL
+    model = resolve_model(requested_model, default_model, backend)
 
     config = {
         "backend": backend,

@@ -45,6 +45,10 @@ from lc_conductor.tooling import (
     ToolServerConfig,
     resolve_builtin_tool_descriptors,
 )
+from lc_conductor.resolve_default_parameters import (
+    get_api_key_for_orchestrator,
+    resolve_base_url,
+)
 
 from lc_conductor.message_handler import handles, HandlerBase
 from lc_conductor import session
@@ -489,6 +493,7 @@ class ActionManager(HandlerBase):
             useCustomUrl = True
         else:
             useCustomUrl = False
+        breakpoint()
         await self.websocket.send_json(
             {
                 "type": "server-update-orchestrator-settings",
@@ -511,6 +516,19 @@ class ActionManager(HandlerBase):
                 },
             }
         )
+
+        await self.websocket.send_json(
+            {
+                "type": "response",
+                "message": {
+                    "source": "System",
+                    "message": f"Orchestrator is configured with model {model}, backend {agent_backend.backend},"
+                    f" and reasoning effort {self.reasoning_effort}.",
+                },
+            }
+        )
+
+        # BVE Sending this led to a reset
         return agent_backend.backend, model, base_url
 
     @handles("ui-update-orchestrator-settings")
@@ -529,27 +547,40 @@ class ActionManager(HandlerBase):
         backend = data["backend"]
         model = data["model"]
         use_custom_url = bool(data.get("useCustomUrl"))
-        base_url = data["customUrl"] if use_custom_url and data["customUrl"] else None
+        base_url = (
+            data["customUrl"]
+            if use_custom_url and data["customUrl"]
+            else resolve_base_url(backend)
+        )
 
         # Treat frontend defaults as "not set" - allow env vars to override
-        if base_url in ["http://localhost:8000/v1", "http://localhost:8000"]:
-            logger.info(
-                f"Received default URL {base_url} from frontend, will check environment variables"
-            )
-            base_url = None
+        # if base_url in ["http://localhost:8000/v1", "http://localhost:8000"]:
+        #     logger.info(
+        #         f"Received default URL {base_url} from frontend, will check environment variables"
+        #     )
+        #     base_url = None
 
-        api_key = data["apiKey"] if data["apiKey"] else None
+        # Check if API key is provided, otherwise use service key
+        api_key = data.get("apiKey")
+        if not api_key:
+            # Empty or missing means use service/environment API key
+            api_key = get_api_key_for_orchestrator(backend)
+            logger.info(f"Using service API key for backend: {backend}")
+        else:
+            # User provided custom API key
+            breakpoint()
+
         reasoning_effort = data.get("reasoningEffort") or "medium"
         self.reasoning_effort = reasoning_effort
         await self.handle_reset()
 
-        # Default to server defaults
-        if backend == os.getenv("FLASK_ORCHESTRATOR_BACKEND", None):
-            if not api_key:
-                api_key = os.getenv("FLASK_ORCHESTRATOR_API_KEY", None)
-            if not base_url:
-                base_url = os.getenv("FLASK_ORCHESTRATOR_URL", None)
+        # Handle base URL fallback
+        # if backend == os.getenv("FLASK_ORCHESTRATOR_BACKEND", None):
+        #     if not base_url:
+        #         base_url = os.getenv("FLASK_ORCHESTRATOR_URL", None)
 
+        # BVE do we need to call validate_inital_model here.  Also why do we
+        # check for the API key here.  Is that ever not set?
         try:
             logger.info(
                 f"Experiment is reset with model {model}, backend {backend}"

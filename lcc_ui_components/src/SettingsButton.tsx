@@ -29,8 +29,9 @@ declare global {
       ORCHESTRATOR?: {
         backend?: string;
         model?: string;
-        apiKey?: string;
+        //apiKey?: string;
         baseUrl?: string;
+        hasServiceApiKey?: string;
       };
     };
   }
@@ -102,11 +103,13 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   // Track if discovery is in progress
   const [isDiscovering, setIsDiscovering] = React.useState(false);
 
+  // BVE this is where the initial state for the apiKey is captured
   // Separate state for API key input (independent of settings)
   const [apiKeyInput, setApiKeyInput] = React.useState(initialSettings?.apiKey || '');
   const [apiKeySaved, setApiKeySaved] = React.useState(true); // Track if current input is saved
   const [showApiKey, setShowApiKey] = React.useState(false); // Track if API key should be visible
   // Track if using service API key (from environment)
+  // If no API key provided and service key is available, default to service key mode
   const [usingServiceKey, setUsingServiceKey] = React.useState(
     !initialSettings?.apiKey && !!hasServiceApiKey
   );
@@ -423,6 +426,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
           normalizedSettings.model || ''
         );
 
+        // BVE I think that this may be where the apiKey is not being sent back
         const updatedSettings = {
           ...normalizedSettings,
           apiKey: normalizedSettings.apiKey || '',
@@ -595,6 +599,8 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   const handleOpenModal = () => {
     setTempSettings(settings);
     setApiKeyInput(settings.apiKey || '');
+    // If no API key and service key available, default to service key mode
+    setUsingServiceKey(!settings.apiKey && !!hasServiceApiKey);
     setApiKeySaved(true); // Opening modal means we're starting with saved state
     setIsModalOpen(true);
     setActiveTab('orchestrator');
@@ -602,10 +608,13 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   };
 
   const handleSave = () => {
-    // Always include the current saved API key when saving settings
+    // When using service key, send empty string to trigger backend fallback
+    // Otherwise send the custom API key
+    const apiKeyToSend = usingServiceKey ? '' : apiKeyInput;
+
     const settingsToSave = {
       ...tempSettings,
-      apiKey: apiKeyInput,
+      apiKey: apiKeyToSend,
     };
 
     setSettings(settingsToSave);
@@ -808,14 +817,18 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     const currentModel = tempSettings.model;
     const currentBackend = tempSettings.backend;
     const currentBaseUrl = tempSettings.useCustomUrl ? tempSettings.customUrl : undefined;
-    const isClearing = !apiKeyInput; // Check if we're clearing the API key
+    const isClearing = !apiKeyInput || usingServiceKey; // Check if we're clearing or using service key
+
+    // When using service key, send sentinel value for backend to recognize
+    const apiKeyForDiscovery = usingServiceKey ? undefined : apiKeyInput || undefined;
 
     try {
-      // Discover models with the new API key (empty string will use env var on backend)
+      // Discover models with the new API key (sentinel value will use env var on backend)
       const discoveredModels = await discoverModelsForBackend(
         currentBackend,
         currentBaseUrl,
         apiKeyInput || undefined, // Convert empty string to undefined
+        //apiKeyForDiscovery,
         true // force refresh
       );
 
