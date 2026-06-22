@@ -46,7 +46,7 @@ from lc_conductor.tooling import (
     resolve_builtin_tool_descriptors,
 )
 from lc_conductor.resolve_default_parameters import (
-    get_api_key_for_orchestrator,
+    find_service_api_key,
     resolve_base_url,
 )
 
@@ -493,7 +493,7 @@ class ActionManager(HandlerBase):
             useCustomUrl = True
         else:
             useCustomUrl = False
-        breakpoint()
+
         await self.websocket.send_json(
             {
                 "type": "server-update-orchestrator-settings",
@@ -553,34 +553,17 @@ class ActionManager(HandlerBase):
             else resolve_base_url(backend)
         )
 
-        # Treat frontend defaults as "not set" - allow env vars to override
-        # if base_url in ["http://localhost:8000/v1", "http://localhost:8000"]:
-        #     logger.info(
-        #         f"Received default URL {base_url} from frontend, will check environment variables"
-        #     )
-        #     base_url = None
-
         # Check if API key is provided, otherwise use service key
         api_key = data.get("apiKey")
         if not api_key:
             # Empty or missing means use service/environment API key
-            api_key = get_api_key_for_orchestrator(backend)
+            api_key = find_service_api_key(backend)
             logger.info(f"Using service API key for backend: {backend}")
-        else:
-            # User provided custom API key
-            breakpoint()
 
         reasoning_effort = data.get("reasoningEffort") or "medium"
         self.reasoning_effort = reasoning_effort
         await self.handle_reset()
 
-        # Handle base URL fallback
-        # if backend == os.getenv("FLASK_ORCHESTRATOR_BACKEND", None):
-        #     if not base_url:
-        #         base_url = os.getenv("FLASK_ORCHESTRATOR_URL", None)
-
-        # BVE do we need to call validate_inital_model here.  Also why do we
-        # check for the API key here.  Is that ever not set?
         try:
             logger.info(
                 f"Experiment is reset with model {model}, backend {backend}"
