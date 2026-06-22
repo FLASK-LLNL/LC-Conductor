@@ -14,15 +14,13 @@
  */
 
 export interface ClientInitState {
-  /** Whether a service API key is available from server environment */
-  hasServiceApiKey: boolean;
   /** Cached API key from client storage (if any) */
   apiKey?: string;
-  /** Selected backend from browser state */
+  /** Selected backend (user override or server default) */
   backend?: string;
-  /** Selected model from browser state */
+  /** Selected model (user override or server default) */
   model?: string;
-  /** Custom base URL from browser state */
+  /** Custom base URL (user override or server default) */
   baseUrl?: string;
   /** Whether using custom URL */
   useCustomUrl?: boolean;
@@ -43,8 +41,9 @@ export interface ClientInitState {
  * ```typescript
  * socket.onopen = () => {
  *   const initMessage = createClientInitMessage({
- *     hasServiceApiKey: window.APP_CONFIG?.ORCHESTRATOR?.hasServiceApiKey || false,
  *     apiKey: settings.apiKey || '',
+ *     backend: settings.backend,
+ *     model: settings.model,
  *   });
  *   socket.send(initMessage);
  * };
@@ -69,8 +68,9 @@ export function createClientInitMessage(state: ClientInitState): string {
  * ```typescript
  * socket.onopen = () => {
  *   sendClientInit(socket, {
- *     hasServiceApiKey: window.APP_CONFIG?.ORCHESTRATOR?.hasServiceApiKey || false,
  *     apiKey: settings.apiKey || '',
+ *     backend: settings.backend,
+ *     model: settings.model,
  *   });
  *   // ... other initialization
  * };
@@ -81,12 +81,13 @@ export function sendClientInit(socket: WebSocket, state: ClientInitState): void 
 }
 
 /**
- * Extract client init state from orchestrator config and settings.
- * Helper function to gather the standard init state.
+ * Extract client init state from orchestrator settings and APP_CONFIG.
+ * Merges orchestratorSettings (user overrides) with APP_CONFIG (server defaults).
+ * Priority: orchestratorSettings > APP_CONFIG > undefined
  *
  * @param orchestratorSettings - Current orchestrator settings (backend, model, apiKey, etc.)
- * @param appConfig - Window APP_CONFIG object
- * @returns Client init state ready to send
+ * @param appConfig - Window APP_CONFIG object with server environment defaults
+ * @returns Client init state ready to send with merged values
  *
  * @example
  * ```typescript
@@ -109,16 +110,19 @@ export function extractClientInitState(
   },
   appConfig?: {
     ORCHESTRATOR?: {
-      hasServiceApiKey?: boolean | string;
+      backend?: string;
+      model?: string;
+      baseUrl?: string;
     };
   }
 ): ClientInitState {
+  // Merge with priority: orchestratorSettings > appConfig
+  // Never populate API key from appConfig (security - it's never sent from backend)
   return {
-    hasServiceApiKey: Boolean(appConfig?.ORCHESTRATOR?.hasServiceApiKey),
     apiKey: orchestratorSettings?.apiKey || '',
-    backend: orchestratorSettings?.backend,
-    model: orchestratorSettings?.model,
-    baseUrl: orchestratorSettings?.customUrl,
-    useCustomUrl: orchestratorSettings?.useCustomUrl,
+    backend: orchestratorSettings?.backend || appConfig?.ORCHESTRATOR?.backend,
+    model: orchestratorSettings?.model || appConfig?.ORCHESTRATOR?.model,
+    baseUrl: orchestratorSettings?.customUrl || appConfig?.ORCHESTRATOR?.baseUrl,
+    useCustomUrl: orchestratorSettings?.useCustomUrl ?? Boolean(appConfig?.ORCHESTRATOR?.baseUrl),
   };
 }
