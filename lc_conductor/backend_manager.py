@@ -356,8 +356,7 @@ class ActionManager(HandlerBase):
             return self.task_manager.selected_tool_runtime
         return self._build_tool_runtime()
 
-    @handles("list-tools")
-    async def handle_list_tools(self, *args, **kwargs) -> None:
+    async def list_tools(self):
         tools: list[ToolDescriptor] = []
         server_list = self._configured_backend_tool_servers()
         for server in server_list:
@@ -426,6 +425,11 @@ class ActionManager(HandlerBase):
             for tool_definition in self.builtin_tool_definitions
         )
 
+        return tools
+
+    @handles("list-tools")
+    async def handle_list_tools(self, *args, **kwargs) -> None:
+        tools = await self.list_tools()
         try:
             await self.websocket.send_json(
                 {
