@@ -17,28 +17,17 @@ import type {
 } from './types.js';
 import './style.css';
 
-const getMessageTimestamp = (msg: SidebarMessage): string | number => msg.timestamp ?? Date.now();
+const getMessageTimestamp = (msg: SidebarMessage): number => msg.timestamp ?? Date.now();
 
-const timestampToDate = (timestamp: string | number): Date => {
-  if (typeof timestamp === 'number') {
-    const timestampMs = timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp;
-    return new Date(timestampMs);
-  }
-
-  const numericTimestamp = Number(timestamp);
-  if (Number.isFinite(numericTimestamp) && timestamp.trim() !== '') {
-    const timestampMs =
-      numericTimestamp < 10_000_000_000 ? numericTimestamp * 1000 : numericTimestamp;
-    return new Date(timestampMs);
-  }
-
-  return new Date(timestamp);
+const timestampToDate = (timestamp: number): Date => {
+  const timestampMs = timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp;
+  return new Date(timestampMs);
 };
 
 const getMessageId = (msg: SidebarMessage, idx: number): string =>
   msg.id ? String(msg.id) : `${getMessageTimestamp(msg)}-${idx}`;
 
-const formatTimestamp = (timestamp: string | number): string => {
+const formatTimestamp = (timestamp: number): string => {
   const date = timestampToDate(timestamp);
 
   if (Number.isNaN(date.getTime())) {
