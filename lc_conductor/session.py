@@ -84,6 +84,19 @@ class PersistentWebsocketWrapper:
         with self._state_condition:
             return self._internal_websocket
 
+    def terminate(self) -> None:
+        """
+        Terminate this persistent websocket session.
+
+        This also wakes any receive calls waiting for a reconnect.
+        """
+        with self._state_condition:
+            self._internal_websocket = None
+            self._message_queue = []
+            self._disconnected_at = time.monotonic()
+            self._timed_out = True
+            self._state_condition.notify_all()
+
     async def set_websocket(self, ws: WebSocket | None) -> None:
         """
         Attach a new websocket, or mark the persistent session disconnected.
@@ -423,9 +436,19 @@ class UserSession:
                 continue
 
         if should_cleanup:
-            UserSessionManager.remove_session(self.username, self.session_id)
-            await self._cancel_handler_tasks()
-            await self.action_manager.cleanup()
+            await self._cleanup()
+
+    async def terminate(self) -> None:
+        """
+        Explicitly terminate this user session without waiting for a timeout.
+        """
+        self.websocket.terminate()
+        await self._cleanup()
+
+    async def _cleanup(self) -> None:
+        UserSessionManager.remove_session(self.username, self.session_id)
+        await self._cancel_handler_tasks()
+        await self.action_manager.cleanup()
 
     def _schedule_action(self, action: str, data: dict[str, Any]) -> None:
         task = asyncio.create_task(self._run_action(action, data))
