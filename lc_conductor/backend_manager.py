@@ -47,6 +47,7 @@ from lc_conductor.tooling import (
 )
 
 from lc_conductor.message_handler import handles, HandlerBase
+from lc_conductor import session
 
 # Mapping from backend name to human-readable labels. Mirrored from the frontend
 BACKEND_LABELS = {
@@ -89,11 +90,17 @@ class TaskManager:
     async def _handle_task_done(self, task: asyncio.Task) -> None:
         try:
             exc = task.exception()
+        except session.SessionTimedOut:
+            logger.info("Background task was cancelled due to session timeout")
+            return
         except asyncio.CancelledError:
             logger.info("Background task was cancelled")
             return
 
         if exc is None:
+            return
+        if isinstance(exc, session.SessionTimedOut):
+            logger.info("Background task was cancelled due to session timeout")
             return
 
         # Log the exception details
@@ -122,6 +129,8 @@ class TaskManager:
             self.current_task = asyncio.create_task(coro)
             self._attach_done_callback(self.current_task)
             await self.current_task  # Await it to catch exceptions properly
+        except session.SessionTimedOut:
+            logger.info("Task cancelled due to session timeout")
         except asyncio.CancelledError:
             logger.info("Task was cancelled")
             raise
@@ -136,6 +145,8 @@ class TaskManager:
             self.current_task.cancel()
             try:
                 await self.current_task
+            except session.SessionTimedOut:
+                logger.info("Current task cancelled due to session timeout.")
             except asyncio.CancelledError:
                 logger.info("Current task cancelled successfully.")
         await self.restart_executor()
