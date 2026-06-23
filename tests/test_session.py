@@ -1,10 +1,16 @@
 import asyncio
 import json
+from typing import Any
 
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
-from lc_conductor.session import PersistentWebsocketWrapper, SessionTimedOut
+from lc_conductor.session import (
+    PersistentWebsocketWrapper,
+    SessionTimedOut,
+    UserSession,
+    UserSessionManager,
+)
 
 
 class FakeWebSocket:
@@ -29,6 +35,50 @@ class FakeWebSocket:
         if self.disconnect_on_receive:
             raise WebSocketDisconnect()
         return self.received_text.pop(0)
+
+    async def receive_json(self, mode: str = "text") -> dict[str, Any]:
+        if self.disconnect_on_receive:
+            raise WebSocketDisconnect()
+        if not self.received_text:
+            raise WebSocketDisconnect()
+        return json.loads(self.received_text.pop(0))
+
+
+class FakeClogger:
+    async def error(self, message: str) -> None:
+        pass
+
+    async def exception(self, exception: Exception) -> None:
+        pass
+
+
+class FakeTaskManager:
+    def __init__(self) -> None:
+        self.clogger = FakeClogger()
+
+
+class FakeActionManager:
+    def __init__(self) -> None:
+        self.task_manager = FakeTaskManager()
+        self.cleanup_called = False
+
+    async def cleanup(self) -> None:
+        self.cleanup_called = True
+
+
+class RecordingUserSession(UserSession):
+    def __init__(self, websocket: FakeWebSocket, action_manager: FakeActionManager):
+        self.actions: list[str] = []
+        super().__init__(
+            "test-user",
+            "test-session",
+            websocket,  # type: ignore[arg-type]
+            action_manager,  # type: ignore[arg-type]
+        )
+
+    async def handle_action(self, action: str, data: dict[str, Any]) -> None:
+        await asyncio.sleep(0)
+        self.actions.append(action)
 
 
 @pytest.mark.asyncio
@@ -95,3 +145,27 @@ async def test_receive_raises_session_timed_out_after_disconnect_timeout() -> No
 
     with pytest.raises(SessionTimedOut):
         await wrapper.send_text("too late")
+
+
+@pytest.mark.asyncio
+async def test_user_session_event_loop_schedules_handlers_and_reattaches() -> None:
+    action_manager = FakeActionManager()
+    session = RecordingUserSession(
+        FakeWebSocket(received_text=[json.dumps({"action": "first"})]),
+        action_manager,
+    )
+
+    try:
+        await session.event_loop()
+        await session.websocket.set_websocket(
+            FakeWebSocket(received_text=[json.dumps({"action": "second"})])  # type: ignore[arg-type]
+        )
+        await session.event_loop()
+    finally:
+        UserSessionManager.remove_session(session.username, session.session_id)
+
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+
+    assert session.actions == ["first", "second"]
+    assert not action_manager.cleanup_called

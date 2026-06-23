@@ -183,7 +183,13 @@ class PersistentWebsocketWrapper:
             {"type": "websocket.close", "code": code, "reason": reason or ""}
         )
 
-    async def _receive_with_timeout(self, method_name: str, *args, **kwargs) -> Any:
+    async def _receive_with_timeout(
+        self,
+        method_name: str,
+        *args,
+        wait_for_reconnect: bool = True,
+        **kwargs,
+    ) -> Any:
         """
         Implements a receive call with a timeout if the underlying websocket is
         not connected.
@@ -208,7 +214,12 @@ class PersistentWebsocketWrapper:
                                 self._internal_websocket = None
                             self._mark_disconnected_locked()
                             self._state_condition.notify_all()
+                        if not wait_for_reconnect:
+                            raise
                         continue
+
+                if not wait_for_reconnect:
+                    raise WebSocketDisconnect()
 
                 await self._wait_for_websocket_or_raise()
 
@@ -309,6 +320,13 @@ class PersistentWebsocketWrapper:
     async def receive_json(self, mode: str = "text") -> Any:
         return await self._receive_with_timeout("receive_json")
 
+    async def receive_json_until_disconnect(self, mode: str = "text") -> Any:
+        return await self._receive_with_timeout(
+            "receive_json",
+            mode=mode,
+            wait_for_reconnect=False,
+        )
+
     async def iter_text(self) -> AsyncIterator[str]:
         try:
             while True:
@@ -361,6 +379,7 @@ class UserSession:
         # Fields necessary for running the code
         self.websocket = PersistentWebsocketWrapper(websocket)
         self.action_manager = action_manager
+        self._handler_tasks: set[asyncio.Task] = set()
 
         # Session management
         UserSessionManager.add_session(username, self)
@@ -372,45 +391,69 @@ class UserSession:
     async def handle_action(self, action: str, data: dict[str, Any]):
         raise NotImplementedError("Abstract method, implement in subclass")
 
-    async def _event_loop_thread(self):
+    async def _event_loop(self):
         """
-        Event loop runner
+        Websocket receive loop.
         """
-        try:
-            while True:
-                try:
-                    data: dict[str, Any] = await self.websocket.receive_json()
-                    action: str | None = data.get("action")
-                    if not action:
-                        await self.action_manager.task_manager.clogger.error(
-                            f"Malformed user message: {data}"
-                        )
-                        continue
-                    await self.handle_action(action, data)
-                except SessionTimedOut:
-                    # Specialized exception breaks loop
-                    break
-                except WebSocketDisconnect:
-                    # Websocket disconnection does nothing
+        should_cleanup = False
+        while True:
+            try:
+                data: dict[str, Any] = (
+                    await self.websocket.receive_json_until_disconnect()
+                )
+                action: str | None = data.get("action")
+                if not action:
+                    await self.action_manager.task_manager.clogger.error(
+                        f"Malformed user message: {data}"
+                    )
                     continue
-                except Exception as ex:
-                    # Other exceptions are reported to the user
-                    await self.action_manager.task_manager.clogger.exception(ex)
-                    continue
-        except SessionTimedOut:
-            await self.websocket.set_websocket(None)
-            UserSessionManager.remove_session(self.username, self.session_id)
+                self._schedule_action(action, data)
+            except SessionTimedOut:
+                # Specialized exception tears down the persistent session.
+                should_cleanup = True
+                break
+            except WebSocketDisconnect:
+                # The concrete websocket is gone. Keep the session object and
+                # action manager alive so a later FastAPI endpoint can attach a
+                # replacement websocket and run this loop again.
+                break
+            except Exception as ex:
+                # Other exceptions are reported to the user
+                await self.action_manager.task_manager.clogger.exception(ex)
+                continue
 
-        # Tear down action manager
-        await self.action_manager.cleanup()
+        if should_cleanup:
+            UserSessionManager.remove_session(self.username, self.session_id)
+            await self._cancel_handler_tasks()
+            await self.action_manager.cleanup()
+
+    def _schedule_action(self, action: str, data: dict[str, Any]) -> None:
+        task = asyncio.create_task(self._run_action(action, data))
+        self._handler_tasks.add(task)
+        task.add_done_callback(self._handler_tasks.discard)
+
+    async def _run_action(self, action: str, data: dict[str, Any]) -> None:
+        try:
+            await self.handle_action(action, data)
+        except Exception as ex:
+            await self.action_manager.task_manager.clogger.exception(ex)
+
+    async def _cancel_handler_tasks(self) -> None:
+        tasks = [task for task in self._handler_tasks if not task.done()]
+        if not tasks:
+            return
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def event_loop(self):
         """
         Runs an event loop listening for messages.
 
-        :note: The event loop runs on a separate thread.
+        :note: The event loop runs in the websocket endpoint task so Starlette
+               websocket I/O stays on the ASGI event loop that owns it.
         """
-        await asyncio.to_thread(self._event_loop_thread)
+        await self._event_loop()
 
 
 class UserSessionManager:
