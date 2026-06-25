@@ -81,7 +81,6 @@ export interface SettingsButtonProps {
   username?: string;
   className?: string;
   httpServerUrl: string;
-  hasServiceApiKey?: boolean;
 }
 
 export interface LocalMcpProxyRequest {
