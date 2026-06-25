@@ -100,7 +100,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   // Track if discovery is in progress
   const [isDiscovering, setIsDiscovering] = React.useState(false);
 
-  // BVE this is where the initial state for the apiKey is captured
+  // Initial state where the apiKey is captured
   // Separate state for API key input (independent of settings)
   const [apiKeyInput, setApiKeyInput] = React.useState(initialSettings?.apiKey || '');
   const [apiKeySaved, setApiKeySaved] = React.useState(true); // Track if current input is saved
@@ -418,7 +418,6 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
           normalizedSettings.model || ''
         );
 
-        // BVE I think that this may be where the apiKey is not being sent back
         const updatedSettings = {
           ...normalizedSettings,
           apiKey: normalizedSettings.apiKey || '',

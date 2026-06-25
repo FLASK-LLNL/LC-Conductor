@@ -528,7 +528,6 @@ class ActionManager(HandlerBase):
             }
         )
 
-        # BVE Sending this led to a reset
         return agent_backend.backend, model, base_url
 
     @handles("ui-update-orchestrator-settings")
