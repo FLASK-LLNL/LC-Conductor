@@ -537,8 +537,6 @@ class ActionManager:
                     reasoning_effort=reasoning_effort,
                 ),
             )
-            # Reset the experiment class for current endpoint
-            self.experiment.reset()
 
             # Report the new orchestrator config to the frontend
             await self.report_orchestrator_config()
