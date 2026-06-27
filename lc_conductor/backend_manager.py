@@ -204,7 +204,8 @@ class ActionManager(HandlerBase):
 
     def _get_wormhole_token(self) -> Optional[str]:
         """Extract wormhole community subtoken from websocket headers."""
-        return extract_bearer_token_from_headers(self.websocket)
+        # Note that the websocket is wrapped in a PersistentWebsocketWrapper
+        return extract_bearer_token_from_headers(self.websocket.websocket)
 
     def setup_run_settings(self, data: dict[str, Any]):
         if "runSettings" in data:
