@@ -106,7 +106,7 @@ export interface LocalMcpProxyResponse {
 
 export interface SidebarMessage {
   id: number;
-  timestamp: string;
+  timestamp?: number;
   message: string;
   smiles: string | null;
   source: string;

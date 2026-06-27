@@ -5,7 +5,8 @@
 ## SPDX-License-Identifier: Apache-2.0
 ###############################################################################
 
-from typing import Any, Literal, Optional, Tuple
+import argparse
+from typing import Any, Callable, Literal, Optional, Tuple
 from fastapi import WebSocket
 import asyncio
 import os
@@ -17,7 +18,6 @@ from charge.experiments.experiment import Experiment
 from charge.clients.agent_factory import AgentFactory
 from charge.clients.agentframework import AgentFrameworkBackend
 
-from functools import partial
 from lc_conductor.tool_registration import (
     list_server_urls,
     list_server_tools,
@@ -46,6 +46,9 @@ from lc_conductor.tooling import (
     resolve_builtin_tool_descriptors,
 )
 
+from lc_conductor.message_handler import handles, HandlerBase
+from lc_conductor import session
+
 # Mapping from backend name to human-readable labels. Mirrored from the frontend
 BACKEND_LABELS = {
     "openai": "OpenAI",
@@ -61,7 +64,7 @@ BACKEND_LABELS = {
 
 
 class TaskManager:
-    """Manages background tasks and processes state for a websocket connection."""
+    """Manages background tasks and processes state for a user session."""
 
     def __init__(self, websocket: WebSocket, max_workers: int = 4):
         self.websocket = websocket
@@ -87,11 +90,17 @@ class TaskManager:
     async def _handle_task_done(self, task: asyncio.Task) -> None:
         try:
             exc = task.exception()
+        except session.SessionTimedOut:
+            logger.info("Background task was cancelled due to session timeout")
+            return
         except asyncio.CancelledError:
             logger.info("Background task was cancelled")
             return
 
         if exc is None:
+            return
+        if isinstance(exc, session.SessionTimedOut):
+            logger.info("Background task was cancelled due to session timeout")
             return
 
         # Log the exception details
@@ -120,6 +129,8 @@ class TaskManager:
             self.current_task = asyncio.create_task(coro)
             self._attach_done_callback(self.current_task)
             await self.current_task  # Await it to catch exceptions properly
+        except session.SessionTimedOut:
+            logger.info("Task cancelled due to session timeout")
         except asyncio.CancelledError:
             logger.info("Task was cancelled")
             raise
@@ -134,6 +145,8 @@ class TaskManager:
             self.current_task.cancel()
             try:
                 await self.current_task
+            except session.SessionTimedOut:
+                logger.info("Current task cancelled due to session timeout.")
             except asyncio.CancelledError:
                 logger.info("Current task cancelled successfully.")
         await self.restart_executor()
@@ -150,24 +163,23 @@ class TaskManager:
         self.clogger.unbind()
 
 
-class ActionManager:
-    """Handles action state for a websocket connection."""
+class ActionManager(HandlerBase):
+    """Handles action state for a user session."""
 
     def __init__(
         self,
-        task_manager: TaskManager,
-        experiment: Experiment,
-        args,
+        websocket: WebSocket,
+        args: argparse.Namespace,
         username: str,
         builtin_tool_definitions: Optional[list[BuiltinToolDefinition]] = None,
     ):
-        self.task_manager = task_manager
-        self.experiment = experiment
+        self.task_manager = TaskManager(websocket)
+        self.experiment = Experiment(task=None)  # Initialize an empty experiment
         self.args = args
         self.username = username
         self.run_settings: RunSettings = RunSettings()
         self.reasoning_effort: Literal["low", "medium", "high"] = "medium"
-        self.websocket = task_manager.websocket
+        self.websocket = websocket
         self.builtin_tool_definitions = builtin_tool_definitions or []
         if not self.task_manager.configured_tool_servers:
             # Sync configured_tool_servers with registered servers from SERVERS global
@@ -184,14 +196,22 @@ class ActionManager:
                 )
                 self.task_manager.configured_tool_servers = []
 
+    async def cleanup(self):
+        """
+        Tears down the action manager
+        """
+        await self.task_manager.close()
+
     def _get_wormhole_token(self) -> Optional[str]:
         """Extract wormhole community subtoken from websocket headers."""
-        return extract_bearer_token_from_headers(self.websocket)
+        # Note that the websocket is wrapped in a PersistentWebsocketWrapper
+        return extract_bearer_token_from_headers(self.websocket.websocket)
 
     def setup_run_settings(self, data: dict[str, Any]):
         if "runSettings" in data:
             self.run_settings = RunSettings(**data["runSettings"])
 
+    @handles("save-context")
     async def handle_save_state(self, data, *args, **kwargs) -> None:
         """Handle save state action."""
         logger.trace("Save state action received")
@@ -202,6 +222,7 @@ class ActionManager:
             {"type": "save-context-response", "experimentContext": experiment_context}
         )
 
+    @handles("load-context")
     async def handle_load_state(self, data, *args, **kwargs) -> None:
         """Handle load state action."""
         logger.trace("Load state action received")
@@ -228,6 +249,7 @@ class ActionManager:
             )
         )
 
+    @handles("list-agents")
     async def handle_list_agents(self, data: object) -> None:
         del data
         await self.websocket.send_json(
@@ -236,6 +258,7 @@ class ActionManager:
             )
         )
 
+    @handles("get-agent")
     async def handle_get_agent(self, data: object) -> None:
         request = AgentRequest.model_validate(data)
         record = self.agent_records().get(request.agentKey) or AgentRecord()
@@ -345,7 +368,7 @@ class ActionManager:
             return self.task_manager.selected_tool_runtime
         return self._build_tool_runtime()
 
-    async def handle_list_tools(self, *args, **kwargs) -> None:
+    async def list_tools(self):
         tools: list[ToolDescriptor] = []
         server_list = self._configured_backend_tool_servers()
         for server in server_list:
@@ -414,6 +437,11 @@ class ActionManager:
             for tool_definition in self.builtin_tool_definitions
         )
 
+        return tools
+
+    @handles("list-tools")
+    async def handle_list_tools(self, *args, **kwargs) -> None:
+        tools = await self.list_tools()
         try:
             await self.websocket.send_json(
                 {
@@ -485,6 +513,7 @@ class ActionManager:
         )
         return agent_backend.backend, model, base_url
 
+    @handles("ui-update-orchestrator-settings")
     async def handle_orchestrator_settings_update(self, data: dict) -> None:
         tool_server_payloads = [
             server
@@ -568,12 +597,14 @@ class ActionManager:
                 }
             )
 
+    @handles("reset")
     async def handle_reset(self, *args, **kwargs) -> None:
         """Handle reset action."""
         await self.task_manager.cancel_current_task()
         self.experiment.reset()
         self.retro_synth_context = None
 
+    @handles("stop")
     async def handle_stop(self, *args, **kwargs) -> None:
         """Handle stop action."""
         logger.info("Stop action received")
@@ -600,6 +631,7 @@ class ActionManager:
             except Exception as e:
                 logger.error(f"Failed to send stopped confirmation: {e}")
 
+    @handles("select-tools-for-task")
     async def handle_select_tools_for_task(self, data: dict) -> None:
         """Handle select-tools-for-task action."""
         logger.info("Select tools for task")
@@ -611,6 +643,7 @@ class ActionManager:
         ]
         self.task_manager.selected_tool_runtime = self._build_tool_runtime(descriptors)
 
+    @handles("get-username")
     async def handle_get_username(self, _: dict) -> None:
         await self.websocket.send_json(
             {

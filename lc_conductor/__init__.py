@@ -5,7 +5,7 @@
 ## SPDX-License-Identifier: Apache-2.0
 ###############################################################################
 
-from lc_conductor.backend_manager import ActionManager, TaskManager
+from lc_conductor.backend_manager import ActionManager, TaskManager, handles
 from lc_conductor.agents import AgentRecord, AgentRequest
 from lc_conductor.callback_logger import CallbackLogger
 from lc_conductor.tool_registration import (
@@ -49,6 +49,7 @@ from lc_conductor.endpoint_discovery import (
 __all__ = [
     "ActionManager",
     "TaskManager",
+    "handles",
     "AgentRecord",
     "AgentRequest",
     "CallbackLogger",
