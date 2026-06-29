@@ -227,10 +227,10 @@ class ActionManager(HandlerBase):
         """Handle load state action."""
         logger.trace("Load state action received")
         experiment_context = data.get("experimentContext")
-        if not experiment_context:
-            logger.debug("No experiment context provided for loading state")
-            return
-        self.experiment.load_state(experiment_context)
+        if experiment_context:
+            self.experiment.load_state(experiment_context)
+        else:
+            self.experiment.load_state(data)
 
     def agent_records(self) -> dict[str, AgentRecord]:
         experiment_state = ExperimentAgentRecords.model_validate(
@@ -566,8 +566,6 @@ class ActionManager(HandlerBase):
                     reasoning_effort=reasoning_effort,
                 ),
             )
-            # Set up an experiment class for current endpoint
-            self.experiment = Experiment(task=None)
 
             # Report the new orchestrator config to the frontend
             await self.report_orchestrator_config()
@@ -602,7 +600,6 @@ class ActionManager(HandlerBase):
         """Handle reset action."""
         await self.task_manager.cancel_current_task()
         self.experiment.reset()
-        self.retro_synth_context = None
 
     @handles("stop")
     async def handle_stop(self, *args, **kwargs) -> None:
