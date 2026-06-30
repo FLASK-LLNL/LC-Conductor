@@ -6,10 +6,10 @@
 //#############################################################################
 
 /**
- * Client initialization state utilities.
+ * Orchestrator settings utilities.
  *
- * Provides the canonical merge of orchestrator settings with server-provided
- * defaults (APP_CONFIG) used to seed the client's initial state.
+ * Provides the canonical merge of saved orchestrator settings with server-provided
+ * defaults (APP_CONFIG) used to seed the client's initial settings state.
  */
 
 import type { OrchestratorSettings } from './types.js';
@@ -27,13 +27,13 @@ import type { OrchestratorSettings } from './types.js';
  *
  * @example
  * ```typescript
- * const coreSettings = extractClientInitState(
+ * const coreSettings = extractInitialSettings(
  *   orchestratorSettings,
  *   window.APP_CONFIG
  * );
  * ```
  */
-export function extractClientInitState(
+export function extractInitialSettings(
   orchestratorSettings?: Partial<OrchestratorSettings>,
   appConfig?: {
     ORCHESTRATOR?: {

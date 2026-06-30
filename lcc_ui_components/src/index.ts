@@ -29,8 +29,8 @@ export {
   normalizeMcpUrl,
 } from './localMcp.js';
 
-// Client init state utilities
-export { extractClientInitState } from './websocketInit.js';
+// Orchestrator settings utilities
+export { extractInitialSettings } from './orchestratorSettings.js';
 
 // Types
 export type {
