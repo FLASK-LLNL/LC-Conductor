@@ -45,6 +45,10 @@ from lc_conductor.tooling import (
     ToolServerConfig,
     resolve_builtin_tool_descriptors,
 )
+from lc_conductor.resolve_default_parameters import (
+    find_service_api_key,
+    resolve_base_url,
+)
 
 from lc_conductor.message_handler import handles, HandlerBase
 from lc_conductor import session
@@ -489,6 +493,7 @@ class ActionManager(HandlerBase):
             useCustomUrl = True
         else:
             useCustomUrl = False
+
         await self.websocket.send_json(
             {
                 "type": "server-update-orchestrator-settings",
@@ -511,6 +516,18 @@ class ActionManager(HandlerBase):
                 },
             }
         )
+
+        await self.websocket.send_json(
+            {
+                "type": "response",
+                "message": {
+                    "source": "System",
+                    "message": f"Orchestrator is configured with model {model}, backend {agent_backend.backend},"
+                    f" and reasoning effort {self.reasoning_effort}.",
+                },
+            }
+        )
+
         return agent_backend.backend, model, base_url
 
     @handles("ui-update-orchestrator-settings")
@@ -529,26 +546,22 @@ class ActionManager(HandlerBase):
         backend = data["backend"]
         model = data["model"]
         use_custom_url = bool(data.get("useCustomUrl"))
-        base_url = data["customUrl"] if use_custom_url and data["customUrl"] else None
+        base_url = (
+            data["customUrl"]
+            if use_custom_url and data["customUrl"]
+            else resolve_base_url(backend)
+        )
 
-        # Treat frontend defaults as "not set" - allow env vars to override
-        if base_url in ["http://localhost:8000/v1", "http://localhost:8000"]:
-            logger.info(
-                f"Received default URL {base_url} from frontend, will check environment variables"
-            )
-            base_url = None
+        # Check if API key is provided, otherwise use service key
+        api_key = data.get("apiKey")
+        if not api_key:
+            # Empty or missing means use service/environment API key
+            api_key = find_service_api_key(backend)
+            logger.info(f"Using service API key for backend: {backend}")
 
-        api_key = data["apiKey"] if data["apiKey"] else None
         reasoning_effort = data.get("reasoningEffort") or "medium"
         self.reasoning_effort = reasoning_effort
         await self.handle_reset()
-
-        # Default to server defaults
-        if backend == os.getenv("FLASK_ORCHESTRATOR_BACKEND", None):
-            if not api_key:
-                api_key = os.getenv("FLASK_ORCHESTRATOR_API_KEY", None)
-            if not base_url:
-                base_url = os.getenv("FLASK_ORCHESTRATOR_URL", None)
 
         try:
             logger.info(

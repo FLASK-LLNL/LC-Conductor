@@ -29,7 +29,6 @@ declare global {
       ORCHESTRATOR?: {
         backend?: string;
         model?: string;
-        apiKey?: string;
         baseUrl?: string;
       };
     };
@@ -101,6 +100,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
   // Track if discovery is in progress
   const [isDiscovering, setIsDiscovering] = React.useState(false);
 
+  // Initial state where the apiKey is captured
   // Separate state for API key input (independent of settings)
   const [apiKeyInput, setApiKeyInput] = React.useState(initialSettings?.apiKey || '');
   const [apiKeySaved, setApiKeySaved] = React.useState(true); // Track if current input is saved
@@ -596,11 +596,22 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     onClick?.();
   };
 
-  const handleSave = () => {
-    // Always include the current saved API key when saving settings
+  const handleSave = async () => {
+    // If API key changed and wasn't saved yet, save it first (triggers model discovery)
+    let selectedModel = tempSettings.model;
+    if (!apiKeySaved) {
+      const discoveredModel = await handleSaveApiKey();
+      // Use the discovered model if available, otherwise keep current
+      if (discoveredModel) {
+        selectedModel = discoveredModel;
+      }
+    }
+
+    // Send the API key (empty string will trigger backend environment fallback)
     const settingsToSave = {
       ...tempSettings,
-      apiKey: apiKeyInput,
+      model: selectedModel, // Use the potentially updated model
+      apiKey: apiKeyInput || '',
     };
 
     setSettings(settingsToSave);
@@ -798,33 +809,38 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
     setApiKeySaved(false); // Mark as unsaved
   };
 
-  const handleSaveApiKey = async () => {
+  const handleSaveApiKey = async (): Promise<string | null> => {
     // Save the API key and trigger model discovery
+    // Returns the selected model (possibly updated) or null on error
     const currentModel = tempSettings.model;
     const currentBackend = tempSettings.backend;
     const currentBaseUrl = tempSettings.useCustomUrl ? tempSettings.customUrl : undefined;
-    const isClearing = !apiKeyInput; // Check if we're clearing the API key
+    const isClearing = !apiKeyInput; // Empty API key means use environment fallback
 
     try {
-      // Discover models with the new API key (empty string will use env var on backend)
+      // Discover models with the API key (empty/undefined will use backend environment fallback)
       const discoveredModels = await discoverModelsForBackend(
         currentBackend,
         currentBaseUrl,
-        apiKeyInput || undefined, // Convert empty string to undefined
+        apiKeyInput || undefined, // Convert empty string to undefined for backend fallback
         true // force refresh
       );
+
+      let selectedModel = currentModel;
 
       // When clearing API key to use env var, reset to environment's default model
       if (isClearing && typeof window !== 'undefined' && window.APP_CONFIG?.ORCHESTRATOR?.model) {
         const envModel = window.APP_CONFIG.ORCHESTRATOR.model;
         // Use environment model if it's in the discovered list
         if (discoveredModels.includes(envModel)) {
+          selectedModel = envModel;
           setTempSettings((prev) => ({
             ...prev,
             model: envModel,
           }));
         } else if (discoveredModels.length > 0) {
           // Otherwise use first discovered model
+          selectedModel = discoveredModels[0];
           setTempSettings((prev) => ({
             ...prev,
             model: discoveredModels[0],
@@ -833,6 +849,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
       } else {
         // Update the selected model if current model is not in the newly discovered list
         if (discoveredModels.length > 0 && !discoveredModels.includes(currentModel)) {
+          selectedModel = discoveredModels[0];
           setTempSettings((prev) => ({
             ...prev,
             model: discoveredModels[0],
@@ -843,12 +860,16 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
       setApiKeySaved(true);
       console.log(
         'API key saved and models discovered:',
-        apiKeyInput ? 'with key' : 'using env var'
+        apiKeyInput ? 'with key' : 'using env var',
+        'selected model:',
+        selectedModel
       );
+      return selectedModel;
     } catch (error) {
       console.error('Error saving API key:', error);
       // Still mark as saved so user can proceed
       setApiKeySaved(true);
+      return null;
     }
   };
 
@@ -1566,7 +1587,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                   <div className="form-group">
                     <label className="form-label">
                       API Key
-                      <span className="helper-text" style={{ marginLeft: '0.5rem' }}>
+                      <span className="helper-text ml-2">
                         {(tempSettings.backend === 'ollama' ||
                           tempSettings.backend === 'huggingface' ||
                           tempSettings.backend === 'vllm') &&
@@ -1578,71 +1599,65 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                         {tempSettings.backend === 'gemini' && '(GOOGLE_API_KEY)'}
                       </span>
                     </label>
-                    <p
-                      className="helper-text"
-                      style={{ marginTop: '-0.25rem', marginBottom: '0.5rem' }}
-                    >
-                      Clear and save to use environment variable fallback
-                    </p>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'stretch' }}>
-                      <input
-                        type={showApiKey ? 'text' : 'password'}
-                        value={apiKeyInput}
-                        onChange={(e) => handleApiKeyInputChange(e.target.value)}
-                        placeholder="Enter your API key"
-                        className="form-input"
-                        style={{ flex: 1 }}
-                      />
-                      <button
-                        onClick={handleSaveApiKey}
-                        disabled={apiKeySaved}
-                        className="btn btn-secondary btn-sm"
-                        style={{
-                          whiteSpace: 'nowrap',
-                          minWidth: '120px',
-                        }}
-                      >
-                        {isDiscovering ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Saving...
-                          </>
-                        ) : apiKeySaved ? (
-                          <>
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                            {apiKeyInput ? 'Saved' : 'Using Env'}
-                          </>
-                        ) : apiKeyInput ? (
-                          'Save API Key'
-                        ) : (
-                          'Clear API Key'
-                        )}
-                      </button>
-                    </div>
-                    <label
-                      className="form-label flex items-center gap-2 cursor-pointer"
-                      style={{ marginTop: '0.5rem', marginBottom: 0 }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={showApiKey}
-                        onChange={(e) => setShowApiKey(e.target.checked)}
-                        className="form-checkbox"
-                      />
-                      <span className="text-sm">Show API key</span>
-                    </label>
+
+                    <>
+                      <p className="helper-text mb-2">
+                        Leave empty to use server environment API key (if configured)
+                      </p>
+                      <div className="flex gap-2 items-stretch">
+                        <input
+                          type={showApiKey ? 'text' : 'password'}
+                          value={apiKeyInput}
+                          onChange={(e) => handleApiKeyInputChange(e.target.value)}
+                          placeholder="Enter your API key (or leave empty)"
+                          className="form-input flex-1"
+                        />
+                        <button
+                          onClick={handleSaveApiKey}
+                          disabled={apiKeySaved}
+                          className="btn btn-secondary btn-sm flex-shrink-0 api-key-save-btn"
+                        >
+                          {isDiscovering ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Saving...
+                            </>
+                          ) : apiKeySaved ? (
+                            <>
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                              {apiKeyInput ? 'Saved' : 'Using Env'}
+                            </>
+                          ) : apiKeyInput ? (
+                            'Save API Key'
+                          ) : (
+                            'Clear API Key'
+                          )}
+                        </button>
+                      </div>
+                      <div className="flex items-center mt-2">
+                        <label className="form-label flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={showApiKey}
+                            onChange={(e) => setShowApiKey(e.target.checked)}
+                            className="form-checkbox"
+                          />
+                          <span className="text-sm">Show API key</span>
+                        </label>
+                      </div>
+                    </>
                   </div>
                 </div>
               )}

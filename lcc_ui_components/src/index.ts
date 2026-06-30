@@ -29,6 +29,9 @@ export {
   normalizeMcpUrl,
 } from './localMcp.js';
 
+// Orchestrator settings utilities
+export { extractInitialSettings } from './orchestratorSettings.js';
+
 // Types
 export type {
   // Settings types
