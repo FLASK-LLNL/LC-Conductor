@@ -6,108 +6,35 @@
 //#############################################################################
 
 /**
- * WebSocket initialization utilities for secure client state handshake.
+ * Client initialization state utilities.
  *
- * This module provides functions to securely send initial client state
- * to the backend via WebSocket data (not query params or headers) which
- * is more secure as it won't be logged in HTTP access logs.
+ * Provides the canonical merge of orchestrator settings with server-provided
+ * defaults (APP_CONFIG) used to seed the client's initial state.
  */
 
-export interface ClientInitState {
-  /** Cached API key from client storage (if any) */
-  apiKey?: string;
-  /** Selected backend (user override or server default) */
-  backend?: string;
-  /** Selected model (user override or server default) */
-  model?: string;
-  /** Custom base URL (user override or server default) */
-  baseUrl?: string;
-  /** Whether using custom URL */
-  useCustomUrl?: boolean;
-  /** Any additional initial state */
-  [key: string]: any;
-}
+import type { OrchestratorSettings } from './types.js';
 
 /**
- * Create a client initialization message to be sent as the first WebSocket message.
+ * Merge saved orchestrator settings with APP_CONFIG server defaults.
+ * Priority: orchestratorSettings (user overrides) > APP_CONFIG (server defaults) > undefined.
  *
- * This is the most secure way to send initial state including sensitive data like
- * API keys, as WebSocket data is not logged in HTTP access logs.
- *
- * @param state - Initial client state to send to backend
- * @returns JSON string ready to send via WebSocket
- *
- * @example
- * ```typescript
- * socket.onopen = () => {
- *   const initMessage = createClientInitMessage({
- *     apiKey: settings.apiKey || '',
- *     backend: settings.backend,
- *     model: settings.model,
- *   });
- *   socket.send(initMessage);
- * };
- * ```
- */
-export function createClientInitMessage(state: ClientInitState): string {
-  return JSON.stringify({
-    action: 'client-init',
-    ...state,
-  });
-}
-
-/**
- * Send client initialization as the first WebSocket message.
- *
- * This should be called in the socket.onopen handler before any other messages.
- *
- * @param socket - WebSocket connection
- * @param state - Initial client state
- *
- * @example
- * ```typescript
- * socket.onopen = () => {
- *   sendClientInit(socket, {
- *     apiKey: settings.apiKey || '',
- *     backend: settings.backend,
- *     model: settings.model,
- *   });
- *   // ... other initialization
- * };
- * ```
- */
-export function sendClientInit(socket: WebSocket, state: ClientInitState): void {
-  socket.send(createClientInitMessage(state));
-}
-
-/**
- * Extract client init state from orchestrator settings and APP_CONFIG.
- * Merges orchestratorSettings (user overrides) with APP_CONFIG (server defaults).
- * Priority: orchestratorSettings > APP_CONFIG > undefined
+ * Returns a partial OrchestratorSettings (only the core fields are populated); callers
+ * layer in their own application defaults for any remaining fields.
  *
  * @param orchestratorSettings - Current orchestrator settings (backend, model, apiKey, etc.)
  * @param appConfig - Window APP_CONFIG object with server environment defaults
- * @returns Client init state ready to send with merged values
+ * @returns Partial orchestrator settings with merged core values
  *
  * @example
  * ```typescript
- * socket.onopen = () => {
- *   const initState = extractClientInitState(
- *     orchestratorSettings,
- *     window.APP_CONFIG
- *   );
- *   sendClientInit(socket, initState);
- * };
+ * const coreSettings = extractClientInitState(
+ *   orchestratorSettings,
+ *   window.APP_CONFIG
+ * );
  * ```
  */
 export function extractClientInitState(
-  orchestratorSettings?: {
-    apiKey?: string;
-    backend?: string;
-    model?: string;
-    customUrl?: string;
-    useCustomUrl?: boolean;
-  },
+  orchestratorSettings?: Partial<OrchestratorSettings>,
   appConfig?: {
     ORCHESTRATOR?: {
       backend?: string;
@@ -115,14 +42,14 @@ export function extractClientInitState(
       baseUrl?: string;
     };
   }
-): ClientInitState {
+): Partial<OrchestratorSettings> {
   // Merge with priority: orchestratorSettings > appConfig
   // Never populate API key from appConfig (security - it's never sent from backend)
   return {
     apiKey: orchestratorSettings?.apiKey || '',
     backend: orchestratorSettings?.backend || appConfig?.ORCHESTRATOR?.backend,
     model: orchestratorSettings?.model || appConfig?.ORCHESTRATOR?.model,
-    baseUrl: orchestratorSettings?.customUrl || appConfig?.ORCHESTRATOR?.baseUrl,
+    customUrl: orchestratorSettings?.customUrl || appConfig?.ORCHESTRATOR?.baseUrl,
     useCustomUrl: orchestratorSettings?.useCustomUrl ?? Boolean(appConfig?.ORCHESTRATOR?.baseUrl),
   };
 }

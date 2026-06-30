@@ -29,13 +29,8 @@ export {
   normalizeMcpUrl,
 } from './localMcp.js';
 
-// WebSocket utilities
-export {
-  createClientInitMessage,
-  sendClientInit,
-  extractClientInitState,
-} from './websocketInit.js';
-export type { ClientInitState } from './websocketInit.js';
+// Client init state utilities
+export { extractClientInitState } from './websocketInit.js';
 
 // Types
 export type {
