@@ -15,7 +15,6 @@ from loguru import logger
 from lc_conductor.callback_logger import CallbackLogger
 from concurrent.futures import ProcessPoolExecutor
 from charge.experiments.experiment import Experiment
-from charge.clients.agent_factory import AgentFactory
 from charge.clients.agentframework import AgentFrameworkBackend
 
 from lc_conductor.tool_registration import (
@@ -179,12 +178,14 @@ class ActionManager(HandlerBase):
         builtin_tool_definitions: Optional[list[BuiltinToolDefinition]] = None,
     ):
         self.task_manager = TaskManager(websocket)
-        # Each session owns its own AgentFactory so backend credentials never
-        # leak across users. Seed it from CLI args + environment.
-        self.agent_factory = AgentFactory()
-        self._seed_default_backend(args)
+        # Each session owns its own agent backend (which carries the user's
+        # credentials), so configuration never leaks across users. Seed it from
+        # CLI args + environment.
+        self.agent_backend: Optional[AgentFrameworkBackend] = (
+            self._resolve_default_backend(args)
+        )
         self.experiment = Experiment(
-            task=None, agent_factory=self.agent_factory
+            task=None, backend=self.agent_backend
         )  # Initialize an empty experiment
         self.args = args
         self.username = username
@@ -207,13 +208,15 @@ class ActionManager(HandlerBase):
                 )
                 self.task_manager.configured_tool_servers = []
 
-    def _seed_default_backend(self, args: argparse.Namespace) -> None:
-        """Register the initial agentframework backend on this session's factory.
+    def _resolve_default_backend(
+        self, args: argparse.Namespace
+    ) -> Optional[AgentFrameworkBackend]:
+        """Build the initial agent backend for this session from CLI args + env.
 
         Resolving the config performs a live ``/models`` validation call, so this
-        is tolerant: on failure we log and leave the factory unseeded (the user
-        can configure a backend from the UI), mirroring the tolerant tool-server
-        initialization below.
+        is tolerant: on failure we log and return ``None`` (the user can
+        configure a backend from the UI), mirroring the tolerant tool-server
+        initialization in ``__init__``.
         """
         try:
             cfg = resolve_orchestrator_config(
@@ -221,19 +224,19 @@ class ActionManager(HandlerBase):
                 requested_model=args.model,
                 return_api_key=True,
             )
-            backend = AgentFrameworkBackend(
+            return AgentFrameworkBackend(
                 model=cfg["model"],
                 backend=cfg["backend"],
                 api_key=cfg["apiKey"],
                 base_url=cfg["baseUrl"],
                 use_responses_api=True,
             )
-            self.agent_factory.register_backend("agentframework", backend)
         except Exception as e:
             logger.warning(
-                f"Failed to seed default agent backend: {e}. "
+                f"Failed to resolve default agent backend: {e}. "
                 "Starting with no configured backend."
             )
+            return None
 
     async def cleanup(self):
         """
@@ -494,7 +497,19 @@ class ActionManager(HandlerBase):
             )
 
     async def report_orchestrator_config(self) -> Tuple[str, str, str]:
-        agent_backend = self.agent_factory.default_backend()
+        agent_backend = self.agent_backend
+        if agent_backend is None:
+            await self.websocket.send_json(
+                {
+                    "type": "response",
+                    "message": {
+                        "source": "System",
+                        "message": "No orchestrator backend is configured. Please "
+                        "configure a model and backend in the settings.",
+                    },
+                }
+            )
+            return "", "", ""
         # Access specific fields
         base_url = agent_backend.base_url
         model = agent_backend.model
@@ -603,17 +618,17 @@ class ActionManager(HandlerBase):
                 f"Experiment is reset with model {model}, backend {backend}"
                 f", and reasoning effort {reasoning_effort}."
             )
-            self.agent_factory.register_backend(
-                "agentframework",
-                AgentFrameworkBackend(
-                    model=model,
-                    backend=backend,
-                    api_key=api_key,
-                    base_url=base_url,
-                    use_responses_api=True,
-                    reasoning_effort=reasoning_effort,
-                ),
+            self.agent_backend = AgentFrameworkBackend(
+                model=model,
+                backend=backend,
+                api_key=api_key,
+                base_url=base_url,
+                use_responses_api=True,
+                reasoning_effort=reasoning_effort,
             )
+            # handle_reset() keeps the same Experiment object, so point it at the
+            # newly configured backend.
+            self.experiment.backend = self.agent_backend
 
             # Report the new orchestrator config to the frontend
             await self.report_orchestrator_config()
