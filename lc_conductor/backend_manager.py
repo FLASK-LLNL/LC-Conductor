@@ -48,6 +48,7 @@ from lc_conductor.tooling import (
 from lc_conductor.resolve_default_parameters import (
     find_service_api_key,
     resolve_base_url,
+    resolve_orchestrator_config,
 )
 
 from lc_conductor.message_handler import handles, HandlerBase
@@ -178,7 +179,13 @@ class ActionManager(HandlerBase):
         builtin_tool_definitions: Optional[list[BuiltinToolDefinition]] = None,
     ):
         self.task_manager = TaskManager(websocket)
-        self.experiment = Experiment(task=None)  # Initialize an empty experiment
+        # Each session owns its own AgentFactory so backend credentials never
+        # leak across users. Seed it from CLI args + environment.
+        self.agent_factory = AgentFactory()
+        self._seed_default_backend(args)
+        self.experiment = Experiment(
+            task=None, agent_factory=self.agent_factory
+        )  # Initialize an empty experiment
         self.args = args
         self.username = username
         self.run_settings: RunSettings = RunSettings()
@@ -199,6 +206,34 @@ class ActionManager(HandlerBase):
                     "Starting with no configured tool servers."
                 )
                 self.task_manager.configured_tool_servers = []
+
+    def _seed_default_backend(self, args: argparse.Namespace) -> None:
+        """Register the initial agentframework backend on this session's factory.
+
+        Resolving the config performs a live ``/models`` validation call, so this
+        is tolerant: on failure we log and leave the factory unseeded (the user
+        can configure a backend from the UI), mirroring the tolerant tool-server
+        initialization below.
+        """
+        try:
+            cfg = resolve_orchestrator_config(
+                requested_backend=args.backend,
+                requested_model=args.model,
+                return_api_key=True,
+            )
+            backend = AgentFrameworkBackend(
+                model=cfg["model"],
+                backend=cfg["backend"],
+                api_key=cfg["apiKey"],
+                base_url=cfg["baseUrl"],
+                use_responses_api=True,
+            )
+            self.agent_factory.register_backend("agentframework", backend)
+        except Exception as e:
+            logger.warning(
+                f"Failed to seed default agent backend: {e}. "
+                "Starting with no configured backend."
+            )
 
     async def cleanup(self):
         """
@@ -459,7 +494,7 @@ class ActionManager(HandlerBase):
             )
 
     async def report_orchestrator_config(self) -> Tuple[str, str, str]:
-        agent_backend = AgentFactory.default_backend()
+        agent_backend = self.agent_factory.default_backend()
         # Access specific fields
         base_url = agent_backend.base_url
         model = agent_backend.model
@@ -568,7 +603,7 @@ class ActionManager(HandlerBase):
                 f"Experiment is reset with model {model}, backend {backend}"
                 f", and reasoning effort {reasoning_effort}."
             )
-            AgentFactory.register_backend(
+            self.agent_factory.register_backend(
                 "agentframework",
                 AgentFrameworkBackend(
                     model=model,
