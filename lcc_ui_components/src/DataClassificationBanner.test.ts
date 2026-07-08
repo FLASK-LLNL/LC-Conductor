@@ -6,7 +6,10 @@
 //#############################################################################
 
 import { describe, it, expect } from 'vitest';
-import { resolveClassificationLevel } from './DataClassificationBanner.js';
+import {
+  resolveClassificationLevel,
+  resolveClassificationPrefix,
+} from './DataClassificationBanner.js';
 import type { DataClassificationConfig } from './types.js';
 
 const config: DataClassificationConfig = {
@@ -50,5 +53,27 @@ describe('resolveClassificationLevel', () => {
     const result = resolveClassificationLevel('livai', 'https://anything', undefined);
     expect(result.isFallback).toBe(true);
     expect(result.level.length).toBeGreaterThan(0);
+  });
+});
+
+describe('resolveClassificationPrefix', () => {
+  it('uses the config-supplied prefix when present', () => {
+    const prefix = resolveClassificationPrefix({
+      ...config,
+      prefix: 'This deployment handles ',
+    });
+    expect(prefix).toBe('This deployment handles ');
+  });
+
+  it('falls back to the default prefix when omitted', () => {
+    expect(resolveClassificationPrefix(config)).toBe(
+      'Flask Copilot is approved for all levels of '
+    );
+  });
+
+  it('falls back to the default prefix when config is undefined', () => {
+    expect(resolveClassificationPrefix(undefined)).toBe(
+      'Flask Copilot is approved for all levels of '
+    );
   });
 });

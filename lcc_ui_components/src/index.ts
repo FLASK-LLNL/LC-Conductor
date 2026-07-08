@@ -20,6 +20,7 @@ export { deserializeAgentChatHistory } from './agentSerialization.js';
 export {
   DataClassificationBanner,
   resolveClassificationLevel,
+  resolveClassificationPrefix,
 } from './DataClassificationBanner.js';
 
 // Constants

@@ -70,6 +70,10 @@ export interface DataClassificationConfig {
   rules: DataClassificationRule[];
   // Level text used when no rule matches the current backend + URL.
   fallbackLevel: string;
+  // Optional sentence prefix rendered before the resolved level. When omitted,
+  // the banner falls back to its built-in default
+  // ("Flask Copilot is approved for all levels of ").
+  prefix?: string;
 }
 
 export interface DiscoverModelsRequest {

@@ -8,7 +8,7 @@
 import React from 'react';
 import type { DataClassificationConfig } from './types.js';
 
-const PREFIX = 'Flask Copilot is approved for all levels of ';
+const DEFAULT_PREFIX = 'Flask Copilot is approved for all levels of ';
 const DEFAULT_FALLBACK_LEVEL = 'an UNKNOWN classification — verify before sending data';
 
 export interface DataClassificationResult {
@@ -43,6 +43,14 @@ export function resolveClassificationLevel(
   return { level: fallbackLevel, isFallback: true };
 }
 
+/**
+ * Resolve the banner sentence prefix. Uses the config-supplied `prefix` when
+ * present, otherwise the built-in default.
+ */
+export function resolveClassificationPrefix(config?: DataClassificationConfig): string {
+  return config?.prefix || DEFAULT_PREFIX;
+}
+
 export interface DataClassificationBannerProps {
   backend: string;
   url: string;
@@ -59,6 +67,7 @@ export const DataClassificationBanner: React.FC<DataClassificationBannerProps> =
   className,
 }) => {
   const { level, isFallback } = resolveClassificationLevel(backend, url, classification);
+  const prefix = resolveClassificationPrefix(classification);
 
   const classes = [
     'lcc-classification-banner',
@@ -71,7 +80,7 @@ export const DataClassificationBanner: React.FC<DataClassificationBannerProps> =
 
   return (
     <div className={classes} role="note" aria-live="polite">
-      {PREFIX}
+      {prefix}
       <strong>{level}</strong>
     </div>
   );
