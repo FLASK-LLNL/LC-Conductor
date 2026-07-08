@@ -64,12 +64,6 @@ export const BACKEND_OPTIONS: BackendOption[] = [
     models: ['gpt-oss-120b', 'gpt-oss-20b'],
   },
   {
-    value: 'huggingface',
-    label: 'HuggingFace Local',
-    defaultUrl: '',
-    models: [''],
-  },
-  {
     value: 'custom',
     label: 'Custom URL',
     defaultUrl: 'http://localhost:8000',

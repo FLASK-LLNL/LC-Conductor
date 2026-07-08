@@ -1588,9 +1588,7 @@ export const SettingsButton: React.FC<SettingsButtonProps> = ({
                     <label className="form-label">
                       API Key
                       <span className="helper-text ml-2">
-                        {(tempSettings.backend === 'ollama' ||
-                          tempSettings.backend === 'huggingface' ||
-                          tempSettings.backend === 'vllm') &&
+                        {(tempSettings.backend === 'ollama' || tempSettings.backend === 'vllm') &&
                           '(Optional for local backends)'}
                         {tempSettings.backend === 'openai' && '(OPENAI_API_KEY)'}
                         {tempSettings.backend === 'livai' && '(LIVAI_API_KEY)'}

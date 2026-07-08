@@ -62,7 +62,6 @@ BACKEND_LABELS = {
     "gemini": "Google Gemini",
     "ollama": "Ollama",
     "vllm": "vLLM",
-    "huggingface": "HuggingFace Local",
     "custom": "Custom URL",
 }
 
