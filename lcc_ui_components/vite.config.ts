@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
@@ -9,7 +9,7 @@ export default defineConfig({
     dts({
       insertTypesEntry: true,
       include: ['src/**/*.ts', 'src/**/*.tsx'],
-      exclude: ['node_modules', 'dist'],
+      exclude: ['node_modules', 'dist', 'src/**/*.test.ts', 'src/**/*.test.tsx'],
     }),
   ],
   build: {
@@ -43,5 +43,9 @@ export default defineConfig({
     },
     sourcemap: true,
     emptyOutDir: true,
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
   },
 });

@@ -55,6 +55,23 @@ export interface BackendOption {
   models: string[];
 }
 
+export interface DataClassificationRule {
+  // Backend value this rule applies to (matches OrchestratorSettings.backend).
+  backend: string;
+  // Optional substring match against the resolved endpoint URL. When present,
+  // the rule only matches if the URL contains this substring.
+  urlContains?: string;
+  // The "XXX" text inserted into "Flask Copilot is approved for all levels of XXX".
+  level: string;
+}
+
+export interface DataClassificationConfig {
+  // Rules evaluated top-to-bottom; first match wins.
+  rules: DataClassificationRule[];
+  // Level text used when no rule matches the current backend + URL.
+  fallbackLevel: string;
+}
+
 export interface DiscoverModelsRequest {
   backend: string;
   base_url?: string;
