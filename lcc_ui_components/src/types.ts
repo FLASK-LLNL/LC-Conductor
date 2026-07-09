@@ -76,9 +76,10 @@ export interface DataClassificationConfig {
   rules: DataClassificationRule[];
   // Level text used when no rule matches the current backend + URL.
   fallbackLevel: string;
-  // Optional sentence prefix rendered before the resolved level. When omitted,
-  // the banner falls back to its built-in default
-  // ("Using this orchestrator endpoint Flask Copilot can process data that is approved for ").
+  // Optional user-configurable message rendered after the fixed lead-in
+  // ("Using this orchestrator endpoint [<label>] ") and before the resolved
+  // level. When omitted, the banner falls back to its built-in default
+  // ("Flask Copilot can process data that is approved for ").
   prefix?: string;
   // Optional banner color used when no rule matches (the fallback level). When
   // omitted, the banner uses its default color (green).

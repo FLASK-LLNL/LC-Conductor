@@ -98,13 +98,13 @@ describe('resolveClassificationPrefix', () => {
 
   it('falls back to the default prefix when omitted', () => {
     expect(resolveClassificationPrefix(config)).toBe(
-      'Using this orchestrator endpoint Flask Copilot can process data that is approved for '
+      'Flask Copilot can process data that is approved for '
     );
   });
 
   it('falls back to the default prefix when config is undefined', () => {
     expect(resolveClassificationPrefix(undefined)).toBe(
-      'Using this orchestrator endpoint Flask Copilot can process data that is approved for '
+      'Flask Copilot can process data that is approved for '
     );
   });
 });

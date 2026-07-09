@@ -6,10 +6,12 @@
 //#############################################################################
 
 import React from 'react';
+import { BACKEND_OPTIONS } from './constants.js';
 import type { BannerColor, DataClassificationConfig } from './types.js';
 
-const DEFAULT_PREFIX =
-  'Using this orchestrator endpoint Flask Copilot can process data that is approved for ';
+// Fixed lead-in; the endpoint label is appended as "[<label>]".
+const STANDARD_PREFIX = 'Using this orchestrator endpoint';
+const DEFAULT_MESSAGE = 'Flask Copilot can process data that is approved for ';
 const DEFAULT_FALLBACK_LEVEL = 'PUBLIC RELEASE (UUR - Unclassified Unlimited Release)';
 
 // Fixed set of colors the banner knows how to render. Values outside this set
@@ -57,15 +59,16 @@ export function resolveClassificationLevel(
 }
 
 /**
- * Resolve the banner sentence prefix. Uses the config-supplied `prefix` when
- * present, otherwise the built-in default.
+ * Resolve the user-configurable message segment. Uses the config-supplied
+ * `prefix` when present, otherwise the built-in default.
  */
 export function resolveClassificationPrefix(config?: DataClassificationConfig): string {
-  return config?.prefix || DEFAULT_PREFIX;
+  return config?.prefix || DEFAULT_MESSAGE;
 }
 
 export interface DataClassificationBannerProps {
   backend: string;
+  backendLabel?: string;
   url: string;
   classification?: DataClassificationConfig;
   position: 'top' | 'bottom';
@@ -74,16 +77,21 @@ export interface DataClassificationBannerProps {
 
 export const DataClassificationBanner: React.FC<DataClassificationBannerProps> = ({
   backend,
+  backendLabel,
   url,
   classification,
   position,
   className,
 }) => {
   const { level, color } = resolveClassificationLevel(backend, url, classification);
-  const prefix = resolveClassificationPrefix(classification);
+  const message = resolveClassificationPrefix(classification);
 
   // An explicit color takes precedence; otherwise the banner defaults to green.
   const bannerColor = color || DEFAULT_BANNER_COLOR;
+
+  // Resolve a human label for the endpoint: explicit prop, else BACKEND_OPTIONS
+  // lookup, else the raw backend value.
+  const label = backendLabel || BACKEND_OPTIONS.find((o) => o.value === backend)?.label || backend;
 
   const classes = [
     'lcc-classification-banner',
@@ -96,7 +104,7 @@ export const DataClassificationBanner: React.FC<DataClassificationBannerProps> =
 
   return (
     <div className={classes} role="note" aria-live="polite">
-      {prefix}
+      {STANDARD_PREFIX} [{label}] {message}
       <strong>{level}</strong>
     </div>
   );
