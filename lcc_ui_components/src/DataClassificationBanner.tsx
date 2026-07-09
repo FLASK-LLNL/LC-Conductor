@@ -6,14 +6,27 @@
 //#############################################################################
 
 import React from 'react';
-import type { DataClassificationConfig } from './types.js';
+import type { BannerColor, DataClassificationConfig } from './types.js';
 
-const DEFAULT_PREFIX = 'Flask Copilot is approved for all levels of ';
-const DEFAULT_FALLBACK_LEVEL = 'an UNKNOWN classification — verify before sending data';
+const DEFAULT_PREFIX =
+  'Using this orchestrator endpoint Flask Copilot can process data that is approved for ';
+const DEFAULT_FALLBACK_LEVEL = 'PUBLIC RELEASE (UUR - Unclassified Unlimited Release)';
+
+// Fixed set of colors the banner knows how to render. Values outside this set
+// (e.g. from a mistyped env var) are ignored so the banner uses default styling.
+const BANNER_COLORS: readonly BannerColor[] = ['green', 'yellow', 'red', 'orange'];
+
+// Color used when a classification does not specify one (and, for the fallback,
+// when no fallbackColor is set).
+const DEFAULT_BANNER_COLOR: BannerColor = 'green';
+
+const normalizeColor = (color?: string): BannerColor | undefined =>
+  BANNER_COLORS.includes(color as BannerColor) ? (color as BannerColor) : undefined;
 
 export interface DataClassificationResult {
   level: string;
   isFallback: boolean;
+  color?: BannerColor;
 }
 
 /**
@@ -38,9 +51,9 @@ export function resolveClassificationLevel(
       rule.backend === backend && (rule.urlContains ? (url || '').includes(rule.urlContains) : true)
   );
   if (match) {
-    return { level: match.level, isFallback: false };
+    return { level: match.level, isFallback: false, color: normalizeColor(match.color) };
   }
-  return { level: fallbackLevel, isFallback: true };
+  return { level: fallbackLevel, isFallback: true, color: normalizeColor(config.fallbackColor) };
 }
 
 /**
@@ -66,13 +79,16 @@ export const DataClassificationBanner: React.FC<DataClassificationBannerProps> =
   position,
   className,
 }) => {
-  const { level, isFallback } = resolveClassificationLevel(backend, url, classification);
+  const { level, color } = resolveClassificationLevel(backend, url, classification);
   const prefix = resolveClassificationPrefix(classification);
+
+  // An explicit color takes precedence; otherwise the banner defaults to green.
+  const bannerColor = color || DEFAULT_BANNER_COLOR;
 
   const classes = [
     'lcc-classification-banner',
     `lcc-classification-banner--${position}`,
-    isFallback ? 'lcc-classification-banner--caution' : '',
+    `lcc-classification-banner--${bannerColor}`,
     className || '',
   ]
     .filter(Boolean)

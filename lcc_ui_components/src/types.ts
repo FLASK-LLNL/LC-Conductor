@@ -55,6 +55,9 @@ export interface BackendOption {
   models: string[];
 }
 
+// Fixed palette of banner colors selectable per classification.
+export type BannerColor = 'green' | 'yellow' | 'red' | 'orange';
+
 export interface DataClassificationRule {
   // Backend value this rule applies to (matches OrchestratorSettings.backend).
   backend: string;
@@ -63,6 +66,9 @@ export interface DataClassificationRule {
   urlContains?: string;
   // The "XXX" text inserted into "Flask Copilot is approved for all levels of XXX".
   level: string;
+  // Optional banner color for this classification. When omitted, the banner
+  // uses its default styling.
+  color?: BannerColor;
 }
 
 export interface DataClassificationConfig {
@@ -72,8 +78,11 @@ export interface DataClassificationConfig {
   fallbackLevel: string;
   // Optional sentence prefix rendered before the resolved level. When omitted,
   // the banner falls back to its built-in default
-  // ("Flask Copilot is approved for all levels of ").
+  // ("Using this orchestrator endpoint Flask Copilot can process data that is approved for ").
   prefix?: string;
+  // Optional banner color used when no rule matches (the fallback level). When
+  // omitted, the banner uses its default color (green).
+  fallbackColor?: BannerColor;
 }
 
 export interface DiscoverModelsRequest {

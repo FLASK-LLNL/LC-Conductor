@@ -56,6 +56,37 @@ describe('resolveClassificationLevel', () => {
   });
 });
 
+describe('resolveClassificationLevel colors', () => {
+  const colored: DataClassificationConfig = {
+    fallbackLevel: 'UNKNOWN',
+    fallbackColor: 'red',
+    rules: [
+      { backend: 'livai', level: 'UNCLASSIFIED data', color: 'green' },
+      { backend: 'custom', level: 'OUO data', color: 'orange' },
+      { backend: 'ollama', level: 'weird', color: 'purple' as unknown as 'green' },
+    ],
+  };
+
+  it('returns the rule color when a rule matches', () => {
+    expect(resolveClassificationLevel('livai', '', colored).color).toBe('green');
+    expect(resolveClassificationLevel('custom', '', colored).color).toBe('orange');
+  });
+
+  it('returns the fallbackColor when no rule matches', () => {
+    const result = resolveClassificationLevel('openai', '', colored);
+    expect(result.isFallback).toBe(true);
+    expect(result.color).toBe('red');
+  });
+
+  it('ignores colors outside the fixed palette', () => {
+    expect(resolveClassificationLevel('ollama', '', colored).color).toBeUndefined();
+  });
+
+  it('leaves color undefined when none is configured', () => {
+    expect(resolveClassificationLevel('livai', 'https://anything', config).color).toBeUndefined();
+  });
+});
+
 describe('resolveClassificationPrefix', () => {
   it('uses the config-supplied prefix when present', () => {
     const prefix = resolveClassificationPrefix({
@@ -67,13 +98,13 @@ describe('resolveClassificationPrefix', () => {
 
   it('falls back to the default prefix when omitted', () => {
     expect(resolveClassificationPrefix(config)).toBe(
-      'Flask Copilot is approved for all levels of '
+      'Using this orchestrator endpoint Flask Copilot can process data that is approved for '
     );
   });
 
   it('falls back to the default prefix when config is undefined', () => {
     expect(resolveClassificationPrefix(undefined)).toBe(
-      'Flask Copilot is approved for all levels of '
+      'Using this orchestrator endpoint Flask Copilot can process data that is approved for '
     );
   });
 });

@@ -748,8 +748,23 @@
   border-right: none;
 }
 
-/* Caution styling when no rule matches (fallback level). */
-.lcc-classification-banner--caution {
-  background: #b45309; /* amber-700 */
+/* Selectable classification colors (green | yellow | red | orange). */
+.lcc-classification-banner--green {
+  background: #15803d; /* green-700 */
+  color: #f0fdf4;
+}
+
+.lcc-classification-banner--yellow {
+  background: #facc15; /* yellow-400 */
+  color: #1f2937; /* dark text for contrast on yellow */
+}
+
+.lcc-classification-banner--red {
+  background: #b91c1c; /* red-700 */
+  color: #fef2f2;
+}
+
+.lcc-classification-banner--orange {
+  background: #c2410c; /* orange-700 */
   color: #fff7ed;
 }

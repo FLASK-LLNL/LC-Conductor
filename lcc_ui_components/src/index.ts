@@ -48,6 +48,7 @@ export type {
   ReasoningEffort,
   OrchestratorSettings,
   BackendOption,
+  BannerColor,
   DataClassificationRule,
   DataClassificationConfig,
   SettingsButtonProps,
