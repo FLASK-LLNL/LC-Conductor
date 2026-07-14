@@ -11,7 +11,7 @@ import type { BannerColor, DataClassificationConfig } from './types.js';
 
 // Fixed lead-in; the endpoint label is appended as "[<label>]".
 const STANDARD_PREFIX = 'Using this orchestrator endpoint';
-const DEFAULT_MESSAGE = 'Flask Copilot can process data that is approved for ';
+const DEFAULT_MESSAGE = 'This web app can process data that is approved for ';
 const DEFAULT_FALLBACK_LEVEL = 'PUBLIC RELEASE (UUR - Unclassified Unlimited Release)';
 
 // Fixed set of colors the banner knows how to render. Values outside this set
