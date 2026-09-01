@@ -17,7 +17,7 @@ import time
 import os
 import re
 import asyncio
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from charge.utils.mcp_workbench_utils import (
     list_mcp_tools_direct,
